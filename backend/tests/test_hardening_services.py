@@ -47,6 +47,9 @@ class OwnerCompletionApprovalGateTests(SimpleTestCase):
         """Revoked driver → no credit AND job left un-transitioned (so reconcile skips it)."""
         from accounts.delivery_service import complete_delivery_job_for_order
         mock_dj.Status.DELIVERED = "delivered"
+        mock_dj.Status.PICKED_UP = "picked_up"  # R6-25: the function compares
+        # job.status against this member; the patched class must carry the real
+        # value or every job routes to the cancel path (mocked-enum trap).
         mock_customer.objects.filter.return_value.exists.return_value = False  # approval revoked
         job = SimpleNamespace(is_terminal=False, driver_id=5, status="picked_up",
                               delivered_at=None, save=MagicMock())
@@ -69,6 +72,7 @@ class OwnerCompletionApprovalGateTests(SimpleTestCase):
         """Still-approved driver → job marked DELIVERED and driver credited (happy path)."""
         from accounts.delivery_service import complete_delivery_job_for_order
         mock_dj.Status.DELIVERED = "delivered"
+        mock_dj.Status.PICKED_UP = "picked_up"  # R6-25: see the revoked test.
         mock_customer.objects.filter.return_value.exists.return_value = True  # still approved
         job = SimpleNamespace(is_terminal=False, driver_id=5, status="picked_up",
                               delivered_at=None, save=MagicMock())
@@ -88,14 +92,23 @@ class OwnerCompletionApprovalGateTests(SimpleTestCase):
     @patch("accounts.models.Customer")
     @patch("accounts.models.DeliveryJob")
     def test_no_driver_skips_approval_check(self, mock_dj, mock_customer, _atomic, mock_credit):
-        """A driverless job returns before the approval query even runs (no Customer hit)."""
+        """A driverless job never runs the approval query (no Customer hit) — and,
+        under R6-25, is cancelled: the owner completed the order themselves, so
+        there is nobody to credit and the job must not linger as dispatchable."""
         from accounts.delivery_service import complete_delivery_job_for_order
-        job = SimpleNamespace(is_terminal=False, driver_id=None, status="searching", save=MagicMock())
+        mock_dj.Status.PICKED_UP = "picked_up"  # R6-25: see the revoked test.
+        mock_dj.Status.CANCELLED = "cancelled"
+        job = SimpleNamespace(is_terminal=False, driver_id=None, status="searching",
+                              cancelled_at=None, save=MagicMock())
         mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
 
         complete_delivery_job_for_order(1, "ORD-1")
 
-        job.save.assert_not_called()
+        self.assertEqual(job.status, "cancelled")
+        self.assertIsNotNone(job.cancelled_at)
+        job.save.assert_called_once_with(
+            update_fields=["status", "cancelled_at", "platform_commission"]
+        )
         mock_credit.assert_not_called()
         mock_customer.objects.filter.assert_not_called()
 
