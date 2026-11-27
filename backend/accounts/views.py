@@ -2305,6 +2305,72 @@ class CustomerWalletChargeRequestsView(APIView):
         ]})
 
 
+def _validate_charge_request_order(cr):
+    """R6-03: order guard for an above-threshold wallet-charge approval.
+
+    Runs in the PUBLIC schema (the approve view) — enters the tenant's schema
+    via tenant_context to read the order, mirroring CustomerClaimOrderView.
+    Returns a 4xx Response when the charge must not proceed, else None:
+      * unknown order_number → 404; CANCELLED / COMPLETED → 409;
+        already-PAID → 409; amount above the outstanding → 409 overpay
+        (surfacing the outstanding in the approve response).
+    Fail-open (None) when the tenant/order cannot be read at all: the
+    bill-sync guard (_sync_charged_request_bills) re-checks before applying,
+    and a read failure must not wedge the approval flow — the debit itself
+    needs the same stores, so a real outage fails there anyway.
+    """
+    if not cr.order_number:
+        return None
+    try:
+        from tenancy.models import Tenant
+        from django_tenants.utils import tenant_context as _tc
+        from menu.models import Order
+        from menu.views import _order_collected as _collected
+        from decimal import Decimal as _Dec
+        tenant = Tenant.objects.get(pk=cr.tenant_id)
+    except Exception:
+        return None
+    try:
+        with _tc(tenant):
+            order = Order.objects.filter(order_number=cr.order_number).only(
+                "id", "total", "wallet_amount_paid", "payment_status", "status"
+            ).first()
+            if order is None:
+                return Response(
+                    {"detail": "Order not found.", "code": "order_not_found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if order.status == Order.Status.CANCELLED:
+                return Response(
+                    {"detail": "This order was cancelled.", "code": "order_cancelled"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if order.status == Order.Status.COMPLETED:
+                return Response(
+                    {"detail": "This order is already completed.", "code": "order_completed"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if order.payment_status == Order.PaymentStatus.PAID:
+                return Response(
+                    {"detail": "This order is already paid.", "code": "already_paid"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            _outstanding = _Dec(str(order.total or "0")) - _collected(order)
+            if _Dec(str(cr.amount)) > _outstanding:
+                return Response(
+                    {
+                        "detail": f"Amount exceeds the outstanding balance {_outstanding}.",
+                        "code": "overpay",
+                        "outstanding": str(_outstanding),
+                        "total": str(order.total),
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+    except Exception:
+        return None
+    return None
+
+
 class CustomerWalletChargeApproveView(APIView):
     """POST /api/customer/wallet/charge-requests/<id>/approve/ — approve a pending charge,
     debiting the wallet. Idempotent: the request carries the debit key, and a re-approve
@@ -2323,6 +2389,28 @@ class CustomerWalletChargeApproveView(APIView):
         from .wallet_service import debit_wallet, InsufficientFunds, WalletError
         from django.db import transaction as _dbtx
         from django.utils import timezone as _tz
+
+        # R6-03: resolve the order BEFORE any debit. The customer approves a
+        # waiter-typed amount; by approve time the order may be unknown (typo),
+        # cancelled, completed, or already settled — debiting first and syncing
+        # later leaves the money taken with nowhere to land. Only PENDING
+        # requests are validated (a CHARGED replay must keep replaying); the
+        # sync guard is the backstop for the race between this check and the
+        # debit. A pre-load miss fails open the same way (mock/legacy rows).
+        try:
+            _pre = WalletChargeRequest.objects.filter(
+                pk=request_id, customer_id=customer_id
+            ).first()
+        except Exception:
+            _pre = None
+        if (
+            _pre is not None
+            and _pre.status == WalletChargeRequest.Status.PENDING
+            and _pre.order_number
+        ):
+            _order_err = _validate_charge_request_order(_pre)
+            if _order_err is not None:
+                return _order_err
 
         try:
             with _dbtx.atomic():

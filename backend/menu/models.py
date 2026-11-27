@@ -769,8 +769,17 @@ class Order(models.Model):
         return self.status == self.Status.SCHEDULED
 
     def mark_paid(self, *, save: bool = True):
-        """Settle the order's bill. Idempotent."""
+        """Settle the order's bill. Idempotent.
+
+        R6-08 defence-in-depth: a CANCELLED order never flips to PAID here, no
+        matter which caller reaches this method — the view-level 409 in
+        OwnerOrderMarkPaidView is the loud guard; this is the backstop so no
+        other settle path (void/comp flip, wallet-cover settle) can resurrect a
+        cancelled-and-refunded bill.
+        """
         from django.utils import timezone as _tz
+        if self.status == self.Status.CANCELLED:
+            return
         if self.payment_status != self.PaymentStatus.PAID:
             self.payment_status = self.PaymentStatus.PAID
             self.paid_at = _tz.now()

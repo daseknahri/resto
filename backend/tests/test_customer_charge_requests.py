@@ -113,6 +113,43 @@ class ApproveChargeRequestTests(SimpleTestCase):
         self.assertEqual(cr.status, WalletChargeRequest.Status.CHARGED)
         self.assertEqual(cr.wallet_tx_id, 55)
 
+    def test_approve_invalid_order_returns_409_no_debit(self):
+        """R6-03: the order behind a PENDING request fails validation (unknown /
+        cancelled / overpay) → the approve is refused BEFORE any debit."""
+        from rest_framework.response import Response as _Resp
+        pre = _pending_cr()
+        pre.status = WalletChargeRequest.Status.PENDING
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_objs, \
+             patch("accounts.wallet_service.debit_wallet") as mock_debit, \
+             patch("accounts.views._validate_charge_request_order",
+                   return_value=_Resp({"detail": "Order not found.", "code": "order_not_found"},
+                                      status=status.HTTP_404_NOT_FOUND)) as mock_val, \
+             patch("django.db.transaction.atomic"):
+            mock_objs.filter.return_value.first.return_value = pre
+            mock_objs.select_for_update.return_value.get.return_value = pre
+            resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "order_not_found")
+        mock_val.assert_called_once()
+        mock_debit.assert_not_called()
+
+    def test_approve_validation_pass_still_charges(self):
+        """R6-03: a PENDING request whose order validates proceeds to the debit."""
+        cr = _pending_cr()
+        tx = MagicMock(id=55, amount=Decimal("100.00"), balance_after=Decimal("20.00"))
+        pre = _pending_cr()
+        pre.status = WalletChargeRequest.Status.PENDING
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_objs, \
+             patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit, \
+             patch("accounts.views._validate_charge_request_order", return_value=None), \
+             patch("django.db.transaction.atomic"):
+            mock_objs.filter.return_value.first.return_value = pre
+            mock_objs.select_for_update.return_value.get.return_value = cr
+            resp = self._post()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["status"], "charged")
+        mock_debit.assert_called_once()
+
     def test_reapprove_already_charged_replays_without_recharging(self):
         cr = _pending_cr()
         cr.status = WalletChargeRequest.Status.CHARGED

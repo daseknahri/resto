@@ -50,6 +50,16 @@ class OrderPaymentStateModelTests(SimpleTestCase):
         self.assertEqual(o.payment_status, Order.PaymentStatus.PAID)
         self.assertEqual(o.paid_at, first_ts)
 
+    def test_mark_paid_refuses_cancelled_order(self):
+        """R6-08 (model backstop): mark_paid() on a CANCELLED order is a no-op —
+        the bill stays UNPAID however the method is reached."""
+        o = Order(fulfillment_type=Order.FulfillmentType.TABLE,
+                  status=Order.Status.CANCELLED)
+        o.mark_paid(save=False)
+        self.assertEqual(o.payment_status, Order.PaymentStatus.UNPAID)
+        self.assertFalse(o.is_paid)
+        self.assertIsNone(o.paid_at)
+
 
 class OwnerOrderMarkPaidViewTests(SimpleTestCase):
     def setUp(self):
@@ -175,6 +185,21 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
         req.user = MagicMock(id=9)
         resp = self.view(req, order_id=999)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.Order.objects")
+    def test_cancelled_order_mark_paid_409_no_phantom_row(self, objects_mock, _gate):
+        """R6-08: a cancelled-and-refunded order (stale tap, wrong row) → 409
+        order_cancelled, stays UNPAID, and no phantom CASH ledger row is written."""
+        order = self._order(status=Order.Status.CANCELLED)
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value = order
+        req = self.factory.post("/api/owner/orders/5/mark-paid/")
+        req.user = MagicMock(id=9)
+        resp = self.view(req, order_id=5)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "order_cancelled")
+        self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
+        self._op_objects_mock.create.assert_not_called()
 
     # ── S1: reconciliation guard ─────────────────────────────────────────────
 

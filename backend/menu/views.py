@@ -5947,11 +5947,18 @@ class StaffVoidOrderItemView(APIView):
                     getattr(order, "order_number", getattr(order, "pk", "?")),
                 )
 
-            # Partial wallet refund — two cases:
+            # Partial wallet refund — two cases (R6-02: the overpay is computed
+            # from the RECONCILED collected figure — ledger cash + wallet counted
+            # once — not from wallet_amount_paid alone. Ledger cash was invisible
+            # to the old math but counted by _order_collected in the PAID flip, so
+            # a partly-cash tab could flip PAID while keeping a cash overpay):
             #   A. PAID order: refund min(line_total, wallet_amount_paid); status stays PAID.
-            #   B. UNPAID order with wallet_amount_paid > new total (split-bill overpayment):
-            #      refund the overpay and flip the order to PAID so the payment flow
-            #      doesn't get stuck (ledger now fully covers the reduced total).
+            #   B. UNPAID order: refund the WALLET share of the reconciled overpay
+            #      (min(overpay, wallet_paid)) and flip to PAID ONLY when the money
+            #      left after the refund covers the new total EXACTLY — any remaining
+            #      cash overpay is surfaced as overpay_cash instead of silently kept.
+            #      The cash half of the refund itself is D2 (no cash-refund mechanism
+            #      yet): staff must resolve it through the correction/refund path.
             # We save the order BEFORE calling credit_wallet so that the
             # wallet_amount_paid decrement and the wallet credit are atomic with
             # respect to failures: if order.save() raises, credit_wallet is never
@@ -5959,8 +5966,20 @@ class StaffVoidOrderItemView(APIView):
             # order.save() via savepoint (fixing the non-atomicity risk).
             _refunded = Decimal("0")
             _extra_save_fields: list = []
+            _overpay_cash = Decimal("0")
             wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
             new_total = Decimal(str(order.total or "0"))
+            # Reconciled collected, from the order's ledger rows (the same rows the
+            # staff payload reads) plus non-ledger wallet money — each wallet
+            # payment counted once (see _order_collected).
+            _ledger_rows = list(order.payments.all()) if hasattr(order, "payments") else []
+            _ledger_paid = sum((Decimal(str(p.amount or "0")) for p in _ledger_rows), Decimal("0"))
+            _ledger_wallet = sum(
+                (Decimal(str(p.amount or "0")) for p in _ledger_rows if p.method == OrderPayment.Method.WALLET),
+                Decimal("0"),
+            )
+            _collected_before = _ledger_paid + max(Decimal("0"), wallet_paid - _ledger_wallet)
+            _overpay_total = max(Decimal("0"), _collected_before - new_total)
             if order.payment_status == Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
                 # Case A — PAID order void
                 line_total = Decimal(str(item.subtotal))
@@ -5968,33 +5987,24 @@ class StaffVoidOrderItemView(APIView):
                 if refund_amount > Decimal("0"):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
+                _overpay_cash = max(Decimal("0"), _collected_before - _refunded - new_total)
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
-                # Case B — UNPAID order: check if the money already collected now covers
-                # the reduced total and / or if wallet overpays the new total.
-                #
-                # BUGFIX (silent write-off): the old predicate was
-                #   sum(order.payments) + wallet_amount_paid >= new_total.
-                # A split-bill wallet payment lands in BOTH signals — StaffOrderPaymentView
-                # / OwnerWalletChargeView write a WALLET OrderPayment row AND bump
-                # wallet_amount_paid — so that wallet money was counted twice. An order
-                # 60-wallet-paid of 100, after voiding a 10 item (new_total 90), computed
-                # 60+60=120 >= 90 and flipped to PAID, collecting only 60 for a 90 order and
-                # writing off 30 (bypassing the S1 reconciliation guard). Use the reconciling
-                # _order_collected() helper, which counts each wallet payment ONCE. Capture it
-                # BEFORE the overpay refund decrements wallet_amount_paid, then subtract what
-                # we refund (the WALLET ledger row is NOT decremented by the refund, so the
-                # helper would otherwise still count it).
-                collected = _order_collected(order)
-                # Overpayment = how much wallet_amount_paid exceeds the new total after void
-                overpay = max(Decimal("0"), wallet_paid - new_total)
-                if overpay > Decimal("0"):
-                    _refunded = overpay
+                # Case B — UNPAID order: refund the wallet share of the reconciled
+                # overpay; the cash share stays visible as overpay_cash.
+                if _overpay_total > Decimal("0"):
+                    _refunded = min(_overpay_total, wallet_paid)
                     order.wallet_amount_paid = wallet_paid - _refunded
+                _overpay_cash = _overpay_total - _refunded
                 # Flip to PAID only if the money actually collected (each wallet payment
-                # counted once), minus what we just refunded, now covers the new total.
-                if collected - _refunded >= new_total:
+                # counted once), minus what we just refunded, now covers the new total
+                # EXACTLY — a remaining cash overpay blocks the flip.
+                if _collected_before - _refunded >= new_total and _overpay_cash == Decimal("0"):
                     order.mark_paid(save=False)
                     _extra_save_fields = ["payment_status", "paid_at"]
+            else:
+                # No wallet money to refund (incl. the pure-cash variant): any cash
+                # over-collected by the void is still surfaced, never kept silently.
+                _overpay_cash = _overpay_total
 
             # Persist total update and (conditionally) wallet_amount_paid before
             # issuing any wallet credit so the DB is consistent if credit_wallet fails.
@@ -6037,7 +6047,12 @@ class StaffVoidOrderItemView(APIView):
         except Exception:
             pass
 
-        return Response(_staff_order_payload(order))
+        _payload = _staff_order_payload(order)
+        if _overpay_cash > Decimal("0"):
+            # R6-02: cash over-collected by this void — surfaced so staff resolve
+            # it (D2 cash-refund mechanism still pending); never silently kept.
+            _payload["overpay_cash"] = str(_overpay_cash.quantize(Decimal("0.01")))
+        return Response(_payload)
 
 
 class StaffCompOrderItemView(APIView):
@@ -6209,11 +6224,22 @@ class StaffCompOrderItemView(APIView):
                     order, _new_food_subtotal
                 )
 
-            # Partial wallet refund — identical two-case handling to void.
+            # Partial wallet refund — identical two-case handling to void (R6-02:
+            # overpay from the RECONCILED collected figure; a remaining cash
+            # overpay is surfaced as overpay_cash and blocks the PAID flip).
             _refunded = Decimal("0")
             _extra_save_fields: list = []
+            _overpay_cash = Decimal("0")
             wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
             new_total = Decimal(str(order.total or "0"))
+            _ledger_rows = list(order.payments.all()) if hasattr(order, "payments") else []
+            _ledger_paid = sum((Decimal(str(p.amount or "0")) for p in _ledger_rows), Decimal("0"))
+            _ledger_wallet = sum(
+                (Decimal(str(p.amount or "0")) for p in _ledger_rows if p.method == OrderPayment.Method.WALLET),
+                Decimal("0"),
+            )
+            _collected_before = _ledger_paid + max(Decimal("0"), wallet_paid - _ledger_wallet)
+            _overpay_total = max(Decimal("0"), _collected_before - new_total)
             if order.payment_status == Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
                 # Case A — PAID order comp
                 line_total = Decimal(str(item.subtotal))
@@ -6221,21 +6247,21 @@ class StaffCompOrderItemView(APIView):
                 if refund_amount > Decimal("0"):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
+                _overpay_cash = max(Decimal("0"), _collected_before - _refunded - new_total)
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
-                # Case B — UNPAID order overpay reconciliation. Identical settle predicate
-                # to StaffVoidOrderItemView, and it carried the same silent-write-off bug:
-                # summing the OrderPayment ledger AND wallet_amount_paid double-counts a
-                # split-bill WALLET row (written to BOTH by StaffOrderPaymentView /
-                # OwnerWalletChargeView). Use _order_collected() (each wallet payment counted
-                # once), captured BEFORE the overpay refund, minus what we refund.
-                collected = _order_collected(order)
-                overpay = max(Decimal("0"), wallet_paid - new_total)
-                if overpay > Decimal("0"):
-                    _refunded = overpay
+                # Case B — UNPAID order overpay reconciliation: refund the wallet
+                # share of the reconciled overpay; the cash share stays visible.
+                if _overpay_total > Decimal("0"):
+                    _refunded = min(_overpay_total, wallet_paid)
                     order.wallet_amount_paid = wallet_paid - _refunded
-                if collected - _refunded >= new_total:
+                _overpay_cash = _overpay_total - _refunded
+                if _collected_before - _refunded >= new_total and _overpay_cash == Decimal("0"):
                     order.mark_paid(save=False)
                     _extra_save_fields = ["payment_status", "paid_at"]
+            else:
+                # No wallet money to refund (incl. the pure-cash variant): any cash
+                # over-collected by the comp is still surfaced, never kept silently.
+                _overpay_cash = _overpay_total
 
             _wallet_fields = ["wallet_amount_paid"] if _refunded > Decimal("0") else []
             _commission_fields = ["commission_amount"] if _recompute_commission else []
@@ -6268,7 +6294,12 @@ class StaffCompOrderItemView(APIView):
         except Exception:
             pass
 
-        return Response(_staff_order_payload(order))
+        _payload = _staff_order_payload(order)
+        if _overpay_cash > Decimal("0"):
+            # R6-02: cash over-collected by this comp — surfaced so staff resolve
+            # it (D2 cash-refund mechanism still pending); never silently kept.
+            _payload["overpay_cash"] = str(_overpay_cash.quantize(Decimal("0.01")))
+        return Response(_payload)
 
 
 class StaffFireCourseView(APIView):
@@ -9400,6 +9431,14 @@ class OwnerOrderMarkPaidView(APIView):
                 # Fast-path cache hit: return current state without touching the DB.
                 _cached_order = Order.objects.filter(id=order_id).first()
                 if _cached_order is not None:
+                    # R6-08: a cancelled order must never replay as paid — a stale
+                    # tap on a cancelled-and-refunded order used to return
+                    # already_paid and, on the slow path, write a phantom CASH row.
+                    if _cached_order.status == Order.Status.CANCELLED:
+                        return Response(
+                            {"detail": "This order was cancelled.", "code": "order_cancelled"},
+                            status=status.HTTP_409_CONFLICT,
+                        )
                     return Response({
                         "id": _cached_order.id,
                         "order_number": _cached_order.order_number,
@@ -9415,6 +9454,16 @@ class OwnerOrderMarkPaidView(APIView):
             order = Order.objects.select_for_update().filter(id=order_id).first()
             if order is None:
                 return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # R6-08: a cancelled order must never flip to PAID — a stale tap on a
+            # cancelled-and-refunded order used to write a phantom CASH row (POS-UX-2)
+            # and flip the bill to PAID. Same code as CustomerOrderPayWalletView.
+            # Placed before the already-PAID fast path and the POS-UX-2 row creation.
+            if order.status == Order.Status.CANCELLED:
+                return Response(
+                    {"detail": "This order was cancelled.", "code": "order_cancelled"},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             was_paid = order.is_paid
 
@@ -12692,8 +12741,17 @@ class CustomerLoyaltyRedeemView(APIView):
                 ).first()
                 if _idem else None
             )
+            # R6-21: parse redeemed_points from the prior row's reference exactly
+            # as the in-block replay path does — the old hardcoded 0 told the
+            # customer "0 points redeemed, 20.00 credited" for a real redemption.
+            _prior_pts = 0
+            if _prior is not None:
+                try:
+                    _prior_pts = int(str(_prior.reference or "").split(":")[1].replace("pts", ""))
+                except (IndexError, ValueError):
+                    _prior_pts = 0
             return Response({
-                "redeemed_points": 0,
+                "redeemed_points": _prior_pts,
                 "credit_amount": str(_prior.amount) if _prior else "0.00",
                 "new_points_balance": _customer.loyalty_points,
                 "new_wallet_balance": str(_customer.wallet_balance),
@@ -13449,6 +13507,62 @@ class CustomerOrderPayWalletView(APIView):
         })
 
 
+def _validate_wallet_charge_order(order_number, amount):
+    """R6-03: resolve the order behind a wallet charge BEFORE any debit.
+
+    Returns a 4xx Response when the charge must not proceed, else None.
+    Guards (same shape as StaffOrderPaymentView's overpay guard):
+      * unknown order_number → 404 (a typo must not debit a wallet)
+      * CANCELLED / COMPLETED order → 409 (no money moves on a dead order)
+      * already-PAID order → 409 (no top-up on a settled bill)
+      * amount above the outstanding (total − _order_collected) → 409 overpay
+    A charge with no order_number is not validated (no bill to settle).
+    The outstanding read is fail-open on an unexpected read error: the
+    bill-sync guard (_sync_charged_request_bills) re-checks before applying,
+    so a transient read failure degrades to the old sync-time check instead
+    of blocking a legitimate charge — and a missing order / terminal status
+    still refuses outright.
+    """
+    order = Order.objects.filter(order_number=order_number).only(
+        "id", "total", "wallet_amount_paid", "payment_status", "status"
+    ).first()
+    if order is None:
+        return Response(
+            {"detail": "Order not found.", "code": "order_not_found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if order.status == Order.Status.CANCELLED:
+        return Response(
+            {"detail": "This order was cancelled.", "code": "order_cancelled"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    if order.status == Order.Status.COMPLETED:
+        return Response(
+            {"detail": "This order is already completed.", "code": "order_completed"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    if order.payment_status == Order.PaymentStatus.PAID:
+        return Response(
+            {"detail": "This order is already paid.", "code": "already_paid"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    try:
+        _outstanding = Decimal(str(order.total or "0")) - _order_collected(order)
+    except Exception:
+        return None
+    if amount > _outstanding:
+        return Response(
+            {
+                "detail": f"Amount exceeds the outstanding balance {_outstanding}.",
+                "code": "overpay",
+                "outstanding": str(_outstanding),
+                "total": str(order.total),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    return None
+
+
 class OwnerWalletChargeView(APIView):
     """POST /api/owner/wallet/charge/ — charge a customer's wallet for an in-person order.
 
@@ -13510,6 +13624,16 @@ class OwnerWalletChargeView(APIView):
 
         order_number = str(request.data.get("order_number") or "").strip()[:100]
         note = str(request.data.get("note") or "").strip()[:200]
+
+        # R6-03: resolve the order BEFORE any money moves (both paths below).
+        # A typo'd order number, an already-settled order, or an amount above
+        # the outstanding used to debit the wallet first and only then look the
+        # order up — the debit landed, the bill never did. No order_number keeps
+        # today's behaviour (general charge, no bill to settle).
+        if order_number:
+            _charge_order_err = _validate_wallet_charge_order(order_number, amount)
+            if _charge_order_err is not None:
+                return _charge_order_err
         _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
         # Server-namespace the externally-supplied key with the TENANT schema so one
         # tenant's body-supplied key can never collide with another tenant's (or with
@@ -13745,8 +13869,46 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
         return applied
     pending = list(_WCR.objects.filter(
         tenant_id=tenant_id, status=_WCR.Status.CHARGED, bill_synced=False, order_number__in=nums
-    ).values_list("id", "order_number", "amount"))
-    for cr_id, onum, amount in pending:
+    ).values_list("id", "order_number", "amount", "wallet_tx_id"))
+    for cr_id, onum, amount, _wallet_tx_id in pending:
+        # R6-03: resolve the order BEFORE applying anything. The customer
+        # approved a waiter-typed amount; by sync time the order may have been
+        # cancelled, completed, or settled another way — applying the charge
+        # then would flip a dead order to PAID or stack money on a settled
+        # bill. A charge that fails validation is NOT applied: the request is
+        # marked synced (so it is not retried forever) and the mismatch is
+        # logged for manual reconciliation — the wallet debit already happened
+        # at approve time and must not be silently re-applied to the bill.
+        _sync_order = Order.objects.filter(order_number=onum).only(
+            "id", "total", "wallet_amount_paid", "payment_status", "status"
+        ).first()
+        _skip_reason = None
+        if _sync_order is None:
+            _skip_reason = "order_not_found"
+        elif _sync_order.status == Order.Status.CANCELLED:
+            _skip_reason = "order_cancelled"
+        elif _sync_order.status == Order.Status.COMPLETED:
+            _skip_reason = "order_completed"
+        elif _sync_order.payment_status == Order.PaymentStatus.PAID:
+            _skip_reason = "already_paid"
+        else:
+            try:
+                _sync_outstanding = Decimal(str(_sync_order.total or "0")) - _order_collected(_sync_order)
+            except Exception:
+                _sync_outstanding = None
+            if _sync_outstanding is not None and amount > _sync_outstanding:
+                _skip_reason = "overpay"
+        if _skip_reason is not None:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "Wallet charge request %s not applied to order %s: %s (amount %s)",
+                cr_id, onum, _skip_reason, amount,
+            )
+            try:
+                _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True)
+            except Exception:
+                pass
+            continue
         try:
             # W P1-4: claim + apply in ONE atomic block (see the docstring). A failure
             # rolls the claim back, so the request stays unsynced and is retried on
@@ -13758,26 +13920,25 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
                 Order.objects.filter(order_number=onum).update(
                     wallet_amount_paid=_F("wallet_amount_paid") + amount
                 )
-        except Exception:
-            continue  # claim or bill update failed — stays unsynced, retried next poll
-        # S1 fix: same OrderPayment tie-in as the instant-charge path above —
-        # this is the above-threshold (customer-approved) charge landing on the
-        # bill, so it needs the same reconciliation-guard visibility. Kept in
-        # its own try so a failure here (e.g. order looked up mid-delete)
-        # can never swallow the `applied` bookkeeping or the settle-check
-        # below — those must run whenever the wallet_amount_paid update above
-        # succeeded, exactly as before this ledger tie-in was added.
-        try:
-            _synced_order = Order.objects.filter(order_number=onum).only("id").first()
-            if _synced_order is not None:
+                # R6-20: the ledger tie-in row lives INSIDE the same atomic block
+                # (S1 fix, moved in from its old best-effort try/except: pass), so a
+                # crash can never leave the bill updated with no ledger row — and it
+                # is anchored on the approved wallet tx id (same key shape as the
+                # instant path's ownercharge:<tx.id>), so the DB unique constraint
+                # on OrderPayment.idempotency_key is the backstop against a
+                # duplicate row on any future retry path.
                 OrderPayment.objects.create(
-                    order=_synced_order,
+                    order=_sync_order,
                     amount=amount,
                     method=OrderPayment.Method.WALLET,
+                    idempotency_key=(
+                        f"ownercharge:{_wallet_tx_id}" if _wallet_tx_id is not None
+                        else f"ownercharge:req:{cr_id}"
+                    ),
                     note="Wallet charge (pay code, approved)",
                 )
         except Exception:
-            pass  # ledger row is best-effort; the wallet bill update above already landed
+            continue  # claim, bill update, or ledger row failed — stays unsynced, retried next poll
         _settle_order_if_wallet_covers(onum)
         applied[onum] = applied.get(onum, Decimal("0")) + amount
     return applied

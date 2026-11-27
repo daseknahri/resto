@@ -21,7 +21,7 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from menu.views import StaffAppendOrderItemsView, StaffVoidOrderItemView, StaffCompOrderItemView
-from menu.models import Order
+from menu.models import Order, OrderPayment
 from accounts.models import User
 
 
@@ -127,6 +127,18 @@ def _make_order(
     order.payments = payments_qs
 
     return order
+
+
+def _cash_row(amount):
+    """A CASH OrderPayment ledger row (mock) for R6-02 tests."""
+    row = MagicMock()
+    row.amount = Decimal(amount)
+    row.method = OrderPayment.Method.CASH
+    row.created_at = MagicMock()
+    row.created_at.isoformat.return_value = "2026-06-11T10:00:00+00:00"
+    row.recorded_by_name = "Sam"
+    row.note = "cash"
+    return row
 
 
 def _make_dish(slug="burger", name="Burger", price=Decimal("12.50"), stock_qty=None,
@@ -767,6 +779,194 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_cw.assert_not_called()
 
+    # ── R6-02: reconciled overpay — cash overpay surfaced, PAID flip blocked ──
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_void_mixed_cash_wallet_surfaces_cash_overpay_no_flip(
+        self, order_om, tx_mock, dish_om, broadcast_mock
+    ):
+        """R6-02: tab 100 (60 cash ledger + 30 wallet), void a 60 dish → new total
+        40, reconciled overpay 50. The wallet share (30) is refunded; the cash
+        share (20) is surfaced as overpay_cash and the order must NOT flip PAID."""
+        item = _make_item(item_id=901, dish_slug="burger", qty=1,
+                          unit_price=Decimal("60.00"), subtotal=Decimal("60.00"),
+                          is_voided=False)
+        remaining = _make_item(item_id=902, dish_slug="pasta",
+                               subtotal=Decimal("40.00"), is_voided=False)
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("30.00"),
+            customer_id=42,
+            items=[item, remaining],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+        voided_item = _make_item(item_id=901, is_voided=True, subtotal=Decimal("60.00"))
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("30.00"),
+            customer_id=42,
+            items=[voided_item, remaining],
+        )
+        second_order.payments.all.return_value = [_cash_row("60.00")]
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+        dish_om.filter.return_value.select_for_update.return_value = []
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post(item_id=901)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Wallet share refunded (30), cash share NOT refunded — surfaced instead.
+        mock_cw.assert_called_once()
+        self.assertEqual(mock_cw.call_args.args[1], Decimal("30.00"))
+        self.assertEqual(second_order.wallet_amount_paid, Decimal("0"))
+        # NOT flipped to PAID while a cash overpay exists.
+        second_order.mark_paid.assert_not_called()
+        self.assertEqual(resp.data["payment_status"], Order.PaymentStatus.UNPAID)
+        self.assertEqual(resp.data["overpay_cash"], "20.00")
+        second_order.save.assert_called_once_with(
+            update_fields=["total", "updated_at", "wallet_amount_paid"]
+        )
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_void_wallet_only_overpay_still_flips_paid(
+        self, order_om, tx_mock, dish_om, broadcast_mock
+    ):
+        """R6-02: pure-wallet overpay (90 wallet, no cash) voiding 60 → new total
+        40, overpay 50 refunded, remainder exactly covers the total → still flips
+        PAID, no overpay_cash. The old behaviour is preserved when no cash is involved."""
+        item = _make_item(item_id=901, dish_slug="burger", qty=1,
+                          unit_price=Decimal("60.00"), subtotal=Decimal("60.00"),
+                          is_voided=False)
+        remaining = _make_item(item_id=902, dish_slug="pasta",
+                               subtotal=Decimal("40.00"), is_voided=False)
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("90.00"),
+            customer_id=42,
+            items=[item, remaining],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+        voided_item = _make_item(item_id=901, is_voided=True, subtotal=Decimal("60.00"))
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("90.00"),
+            customer_id=42,
+            items=[voided_item, remaining],
+        )
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+        dish_om.filter.return_value.select_for_update.return_value = []
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post(item_id=901)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_cw.assert_called_once()
+        self.assertEqual(mock_cw.call_args.args[1], Decimal("50.00"))
+        self.assertEqual(second_order.wallet_amount_paid, Decimal("40.00"))
+        second_order.mark_paid.assert_called_once_with(save=False)
+        self.assertNotIn("overpay_cash", resp.data)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_void_paid_mixed_surfaces_cash_overpay(
+        self, order_om, tx_mock, dish_om, broadcast_mock
+    ):
+        """R6-02 Case A: PAID mixed 100 (30W/70C), void 50 → wallet refunds 30,
+        the 20 cash overpay is surfaced; the order stays PAID (it already was)."""
+        item = _make_item(item_id=901, dish_slug="burger", qty=1,
+                          unit_price=Decimal("50.00"), subtotal=Decimal("50.00"),
+                          is_voided=False)
+        remaining = _make_item(item_id=902, dish_slug="pasta",
+                               subtotal=Decimal("50.00"), is_voided=False)
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=Decimal("30.00"),
+            customer_id=42,
+            items=[item, remaining],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+        voided_item = _make_item(item_id=901, is_voided=True, subtotal=Decimal("50.00"))
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.PAID,
+            wallet_amount_paid=Decimal("30.00"),
+            customer_id=42,
+            items=[voided_item, remaining],
+        )
+        second_order.payments.all.return_value = [_cash_row("70.00")]
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+        dish_om.filter.return_value.select_for_update.return_value = []
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post(item_id=901)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_cw.assert_called_once()
+        self.assertEqual(mock_cw.call_args.args[1], Decimal("30.00"))
+        self.assertEqual(resp.data["overpay_cash"], "20.00")
+        self.assertEqual(resp.data["payment_status"], Order.PaymentStatus.PAID)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_void_pure_cash_overpay_surfaced(
+        self, order_om, tx_mock, dish_om, broadcast_mock
+    ):
+        """R6-02 pure-cash variant: tab 100, 60 cash, void 60 → new total 40,
+        20 cash over-collected. No wallet to refund; the 20 is surfaced and the
+        order is left UNPAID (no silent flip)."""
+        item = _make_item(item_id=901, dish_slug="burger", qty=1,
+                          unit_price=Decimal("60.00"), subtotal=Decimal("60.00"),
+                          is_voided=False)
+        remaining = _make_item(item_id=902, dish_slug="pasta",
+                               subtotal=Decimal("40.00"), is_voided=False)
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("0"),
+            customer_id=42,
+            items=[item, remaining],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+        voided_item = _make_item(item_id=901, is_voided=True, subtotal=Decimal("60.00"))
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("0"),
+            customer_id=42,
+            items=[voided_item, remaining],
+        )
+        second_order.payments.all.return_value = [_cash_row("60.00")]
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+        dish_om.filter.return_value.select_for_update.return_value = []
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post(item_id=901)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_cw.assert_not_called()
+        second_order.mark_paid.assert_not_called()
+        self.assertEqual(resp.data["overpay_cash"], "20.00")
+        self.assertEqual(resp.data["payment_status"], Order.PaymentStatus.UNPAID)
+
     # ── is_voided in staff payload ────────────────────────────────────────────
 
     @patch("menu.views._broadcast_order_change")
@@ -1041,6 +1241,48 @@ class StaffCompOrderItemViewTests(SimpleTestCase):
         self.assertEqual(mock_cw.call_args.args[1], line_total)
         self.assertEqual(kw_args["idempotency_key"], f"compitem:{_c.schema_name}:901")
         self.assertEqual(second_order.wallet_amount_paid, wallet_paid - line_total)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_comp_mixed_cash_wallet_surfaces_cash_overpay_no_flip(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        """R6-02 (comp mirror): tab 100 (60 cash + 30 wallet), comp a 60 dish →
+        new total 40, wallet share 30 refunded, cash overpay 20 surfaced, no PAID flip."""
+        item = _make_item(item_id=901, dish_slug="burger", qty=1,
+                          unit_price=Decimal("60.00"), subtotal=Decimal("60.00"),
+                          is_comped=False)
+        remaining = _make_item(item_id=902, dish_slug="pasta",
+                               subtotal=Decimal("40.00"), is_comped=False)
+        first_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("30.00"),
+            customer_id=42,
+            items=[item, remaining],
+        )
+        first_order.items.filter.return_value.first.return_value = item
+        comped_item = _make_item(item_id=901, is_comped=True, subtotal=Decimal("60.00"))
+        second_order = _make_order(
+            payment_status=Order.PaymentStatus.UNPAID,
+            wallet_amount_paid=Decimal("30.00"),
+            customer_id=42,
+            items=[comped_item, remaining],
+        )
+        second_order.payments.all.return_value = [_cash_row("60.00")]
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
+        order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = second_order
+        tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
+        tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            resp = self._post()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_cw.assert_called_once()
+        self.assertEqual(mock_cw.call_args.args[1], Decimal("30.00"))
+        second_order.mark_paid.assert_not_called()
+        self.assertEqual(resp.data["overpay_cash"], "20.00")
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.transaction")

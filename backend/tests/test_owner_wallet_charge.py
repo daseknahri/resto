@@ -11,7 +11,7 @@ from rest_framework.test import APIRequestFactory
 
 from accounts.models import User
 from accounts.views import _WALLET_PAY_SALT
-from menu.models import OrderPayment
+from menu.models import Order, OrderPayment
 from menu.views import OwnerWalletChargeView, _sync_charged_request_bills
 
 
@@ -228,44 +228,185 @@ class OwnerWalletChargeViewTests(SimpleTestCase):
         mock_op_objects.create.assert_not_called()
 
 
+    # ── R6-03: order validation before any debit ────────────────────────────
+
+    def _charge_order(self, status_val=Order.Status.PENDING,
+                      payment_status_val=Order.PaymentStatus.UNPAID,
+                      total="100.00", wallet_paid="0.00"):
+        o = MagicMock()
+        o.status = status_val
+        o.payment_status = payment_status_val
+        o.total = Decimal(total)
+        o.wallet_amount_paid = Decimal(wallet_paid)
+        return o
+
+    def test_overpay_charge_refused_409_wallet_untouched(self):
+        """R6-03: instant charge 150 against a 100 order (outstanding 100) →
+        409 overpay, no debit, no ledger row."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.balance_after = "40.00"
+        order = self._charge_order()
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit, \
+             patch("menu.views.Order.objects") as mock_order_objects, \
+             patch("menu.views._order_collected", return_value=Decimal("0.00")):
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = order
+            resp = self._post({"token": token, "amount": "150.00", "order_number": "ORD-9"})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "overpay")
+        self.assertEqual(resp.data["outstanding"], "100.00")
+        mock_debit.assert_not_called()
+
+    def test_unknown_order_number_404_no_debit(self):
+        """R6-03: a typo'd order number → 404, wallet untouched."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.balance_after = "40.00"
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit, \
+             patch("menu.views.Order.objects") as mock_order_objects:
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = None
+            resp = self._post({"token": token, "amount": "10.00", "order_number": "ORD-TYPO"})
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "order_not_found")
+        mock_debit.assert_not_called()
+
+    def test_charge_on_paid_order_409_no_debit(self):
+        """R6-03: charge against an already-PAID order → 409, wallet untouched."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.balance_after = "40.00"
+        order = self._charge_order(payment_status_val=Order.PaymentStatus.PAID)
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit, \
+             patch("menu.views.Order.objects") as mock_order_objects, \
+             patch("menu.views._order_collected", return_value=Decimal("100.00")):
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = order
+            resp = self._post({"token": token, "amount": "10.00", "order_number": "ORD-9"})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "already_paid")
+        mock_debit.assert_not_called()
+
+    def test_charge_on_cancelled_order_409_no_debit(self):
+        """R6-03: charge against a CANCELLED order → 409, wallet untouched."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        tx = MagicMock()
+        tx.balance_after = "40.00"
+        order = self._charge_order(status_val=Order.Status.CANCELLED)
+        with patch("accounts.wallet_service.debit_wallet", return_value=tx) as mock_debit, \
+             patch("menu.views.Order.objects") as mock_order_objects, \
+             patch("menu.views._order_collected", return_value=Decimal("0.00")):
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = order
+            resp = self._post({"token": token, "amount": "10.00", "order_number": "ORD-9"})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "order_cancelled")
+        mock_debit.assert_not_called()
+
+    def test_above_threshold_bad_order_creates_no_request(self):
+        """R6-03: above-threshold charge against an order with 50 outstanding
+        for 100 → 409 overpay, no charge request minted, no debit."""
+        token = signing.dumps({"cid": 5}, salt=_WALLET_PAY_SALT)
+        order = self._charge_order(total="50.00")
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_cr, \
+             patch("accounts.wallet_service.debit_wallet") as mock_debit, \
+             patch("menu.views.Order.objects") as mock_order_objects, \
+             patch("menu.views._order_collected", return_value=Decimal("0.00")):
+            mock_order_objects.filter.return_value.only.return_value.first.return_value = order
+            resp = self._post({"token": token, "amount": "100.00", "order_number": "ORD-9"})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "overpay")
+        mock_cr.get_or_create.assert_not_called()
+        mock_debit.assert_not_called()
+
+
 # ── _sync_charged_request_bills (W P1-4) ──────────────────────────────────────
 
 class SyncChargedRequestBillsTests(SimpleTestCase):
     """The claim (bill_synced flip) and the bill application must commit together in
     ONE atomic block — a crash between them must not lose the amount."""
 
-    def _run(self, *, claim_rows=1, bill_side_effect=None):
+    def _run(self, *, claim_rows=1, bill_side_effect=None, order=None):
         rec = _RecordingAtomic()
         with patch("accounts.models.WalletChargeRequest") as WCR, \
              patch("menu.views.Order") as O, \
-             patch("menu.views.OrderPayment"), \
+             patch("menu.views.OrderPayment") as OP, \
              patch("menu.views._settle_order_if_wallet_covers") as settle, \
+             patch("menu.views._order_collected", return_value=Decimal("0.00")), \
              patch("django.db.transaction.atomic", rec):
             WCR.Status.CHARGED = "charged"
+            # R6-20: the sync now also reads wallet_tx_id for the ledger anchor.
             WCR.objects.filter.return_value.values_list.return_value = [
-                (1, "ORD-1", Decimal("25.00"))
+                (1, "ORD-1", Decimal("25.00"), 555)
             ]
             WCR.objects.filter.return_value.update.return_value = claim_rows
+            if order is None:
+                order = MagicMock()
+                order.status = Order.Status.PENDING
+                order.payment_status = Order.PaymentStatus.UNPAID
+                order.total = Decimal("100.00")
+                order.wallet_amount_paid = Decimal("0.00")
+            # Mock-harness note: Order itself is patched, so the enum members
+            # the production code compares against are mock attributes, not the
+            # real TextChoices members the test sets. Map any real enum member on
+            # the mock order to the patched class's attribute of the same name so
+            # the comparisons resolve (same mock object on both sides).
+            for _attr, _enum_cls in (("status", Order.Status), ("payment_status", Order.PaymentStatus)):
+                _v = getattr(order, _attr, None)
+                if isinstance(_v, _enum_cls):
+                    setattr(order, _attr, getattr(getattr(O, _enum_cls.__name__), _v.name))
+            O.objects.filter.return_value.only.return_value.first.return_value = order
             if bill_side_effect is not None:
                 O.objects.filter.return_value.update.side_effect = bill_side_effect
             result = _sync_charged_request_bills(1, ["ORD-1"])
-        return result, rec, WCR, O, settle
+        return result, rec, WCR, O, settle, OP
 
     def test_happy_path_applies_once_inside_one_atomic_block(self):
-        result, rec, WCR, O, settle = self._run()
+        result, rec, WCR, O, settle, OP = self._run()
         self.assertEqual(result, {"ORD-1": Decimal("25.00")})
         self.assertEqual(rec.entered, 1)  # claim + apply shared ONE atomic block
         self.assertEqual(rec.exit_exceptions, [None])  # clean commit
         WCR.objects.filter.return_value.update.assert_called_once()
         O.objects.filter.return_value.update.assert_called_once()
         settle.assert_called_once_with("ORD-1")
+        # R6-20: the ledger row is created inside the same block, anchored on
+        # the approved wallet tx id.
+        OP.objects.create.assert_called_once()
+        self.assertEqual(
+            OP.objects.create.call_args.kwargs["idempotency_key"], "ownercharge:555"
+        )
+
+    def test_sync_skips_cancelled_order_and_marks_synced(self):
+        """R6-03: a charge approved before the order was cancelled must NOT land
+        on the bill — the request is marked synced (no infinite retry) and the
+        amount is not applied."""
+        cancelled = MagicMock()
+        cancelled.status = Order.Status.CANCELLED
+        cancelled.payment_status = Order.PaymentStatus.UNPAID
+        cancelled.total = Decimal("100.00")
+        cancelled.wallet_amount_paid = Decimal("0.00")
+        result, rec, WCR, O, settle, OP = self._run(order=cancelled)
+        self.assertEqual(result, {})
+        O.objects.filter.return_value.update.assert_not_called()
+        OP.objects.create.assert_not_called()
+        settle.assert_not_called()
+
+    def test_sync_skips_overpay_and_marks_synced(self):
+        """R6-03: a 25.00 charge against an order with only 10.00 outstanding
+        must not be applied to the bill."""
+        order = MagicMock()
+        order.status = Order.Status.PENDING
+        order.payment_status = Order.PaymentStatus.UNPAID
+        order.total = Decimal("10.00")
+        order.wallet_amount_paid = Decimal("0.00")
+        result, rec, WCR, O, settle, OP = self._run(order=order)
+        self.assertEqual(result, {})
+        O.objects.filter.return_value.update.assert_not_called()
+        OP.objects.create.assert_not_called()
 
     def test_failed_bill_update_rolls_the_claim_back(self):
         """W P1-4: if the bill update fails, the atomic block exits WITH the
         exception — the claim rolls back, the request stays unsynced, and nothing
         is counted as applied. Before the fix there was no atomic block at all, so
         the claim would have committed and the amount been lost."""
-        result, rec, WCR, O, settle = self._run(bill_side_effect=Exception("boom"))
+        result, rec, WCR, O, settle, OP = self._run(bill_side_effect=Exception("boom"))
         self.assertEqual(result, {})
         self.assertEqual(rec.entered, 1)
         self.assertEqual(len(rec.exit_exceptions), 1)
@@ -275,7 +416,7 @@ class SyncChargedRequestBillsTests(SimpleTestCase):
     def test_lost_claim_is_not_applied(self):
         """A concurrent caller already flipped bill_synced (claim returns 0): the
         bill is not applied a second time."""
-        result, rec, WCR, O, settle = self._run(claim_rows=0)
+        result, rec, WCR, O, settle, OP = self._run(claim_rows=0)
         self.assertEqual(result, {})
         O.objects.filter.return_value.update.assert_not_called()
         settle.assert_not_called()

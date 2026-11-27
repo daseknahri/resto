@@ -146,8 +146,10 @@ class SyncChargedRequestBillsTests(SimpleTestCase):
         import contextlib
         with patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
              patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
-             patch("menu.views.Order.objects") as mock_order:
-            mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"))]
+             patch("menu.views.Order.objects") as mock_order, \
+             patch("menu.views.OrderPayment"):
+            # R6-20: values_list now carries wallet_tx_id for the ledger anchor.
+            mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"), 777)]
             mock_wcr.filter.return_value.update.return_value = 1  # claim succeeds
             applied = _sync_charged_request_bills(3, ["ORD1"])
         self.assertEqual(applied, {"ORD1": Decimal("100.00")})
@@ -158,8 +160,9 @@ class SyncChargedRequestBillsTests(SimpleTestCase):
         import contextlib
         with patch("django.db.transaction.atomic", lambda *a, **k: contextlib.nullcontext()), \
              patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
-             patch("menu.views.Order.objects") as mock_order:
-            mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"))]
+             patch("menu.views.Order.objects") as mock_order, \
+             patch("menu.views.OrderPayment"):
+            mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"), 777)]
             mock_wcr.filter.return_value.update.return_value = 0  # another caller already claimed it
             applied = _sync_charged_request_bills(3, ["ORD1"])
         self.assertEqual(applied, {})
