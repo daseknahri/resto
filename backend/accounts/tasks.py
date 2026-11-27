@@ -465,6 +465,14 @@ def reconcile_wallet_balances():
     _run_command("reconcile_wallet_balances")
 
 
+@shared_task(name="cron.reconcile_topups", acks_late=True, **_CRON_RETRY)
+def reconcile_topups():
+    # R6-19: hourly — credit paid Stripe sessions whose webhook never landed.
+    # The command credits from Stripe's own record (double-credit guards
+    # untouched) and alerts on the payments channel per credit.
+    _run_command("reconcile_topups", reconcile_all=True)
+
+
 @shared_task(name="cron.reconcile_order_refs", acks_late=True, **_CRON_RETRY)
 def reconcile_order_refs():
     _run_command("reconcile_order_refs")

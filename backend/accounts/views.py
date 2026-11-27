@@ -2305,6 +2305,72 @@ class CustomerWalletChargeRequestsView(APIView):
         ]})
 
 
+def _validate_charge_request_order(cr):
+    """R6-03: order guard for an above-threshold wallet-charge approval.
+
+    Runs in the PUBLIC schema (the approve view) — enters the tenant's schema
+    via tenant_context to read the order, mirroring CustomerClaimOrderView.
+    Returns a 4xx Response when the charge must not proceed, else None:
+      * unknown order_number → 404; CANCELLED / COMPLETED → 409;
+        already-PAID → 409; amount above the outstanding → 409 overpay
+        (surfacing the outstanding in the approve response).
+    Fail-open (None) when the tenant/order cannot be read at all: the
+    bill-sync guard (_sync_charged_request_bills) re-checks before applying,
+    and a read failure must not wedge the approval flow — the debit itself
+    needs the same stores, so a real outage fails there anyway.
+    """
+    if not cr.order_number:
+        return None
+    try:
+        from tenancy.models import Tenant
+        from django_tenants.utils import tenant_context as _tc
+        from menu.models import Order
+        from menu.views import _order_collected as _collected
+        from decimal import Decimal as _Dec
+        tenant = Tenant.objects.get(pk=cr.tenant_id)
+    except Exception:
+        return None
+    try:
+        with _tc(tenant):
+            order = Order.objects.filter(order_number=cr.order_number).only(
+                "id", "total", "wallet_amount_paid", "payment_status", "status"
+            ).first()
+            if order is None:
+                return Response(
+                    {"detail": "Order not found.", "code": "order_not_found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if order.status == Order.Status.CANCELLED:
+                return Response(
+                    {"detail": "This order was cancelled.", "code": "order_cancelled"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if order.status == Order.Status.COMPLETED:
+                return Response(
+                    {"detail": "This order is already completed.", "code": "order_completed"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if order.payment_status == Order.PaymentStatus.PAID:
+                return Response(
+                    {"detail": "This order is already paid.", "code": "already_paid"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            _outstanding = _Dec(str(order.total or "0")) - _collected(order)
+            if _Dec(str(cr.amount)) > _outstanding:
+                return Response(
+                    {
+                        "detail": f"Amount exceeds the outstanding balance {_outstanding}.",
+                        "code": "overpay",
+                        "outstanding": str(_outstanding),
+                        "total": str(order.total),
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+    except Exception:
+        return None
+    return None
+
+
 class CustomerWalletChargeApproveView(APIView):
     """POST /api/customer/wallet/charge-requests/<id>/approve/ — approve a pending charge,
     debiting the wallet. Idempotent: the request carries the debit key, and a re-approve
@@ -2323,6 +2389,28 @@ class CustomerWalletChargeApproveView(APIView):
         from .wallet_service import debit_wallet, InsufficientFunds, WalletError
         from django.db import transaction as _dbtx
         from django.utils import timezone as _tz
+
+        # R6-03: resolve the order BEFORE any debit. The customer approves a
+        # waiter-typed amount; by approve time the order may be unknown (typo),
+        # cancelled, completed, or already settled — debiting first and syncing
+        # later leaves the money taken with nowhere to land. Only PENDING
+        # requests are validated (a CHARGED replay must keep replaying); the
+        # sync guard is the backstop for the race between this check and the
+        # debit. A pre-load miss fails open the same way (mock/legacy rows).
+        try:
+            _pre = WalletChargeRequest.objects.filter(
+                pk=request_id, customer_id=customer_id
+            ).first()
+        except Exception:
+            _pre = None
+        if (
+            _pre is not None
+            and _pre.status == WalletChargeRequest.Status.PENDING
+            and _pre.order_number
+        ):
+            _order_err = _validate_charge_request_order(_pre)
+            if _order_err is not None:
+                return _order_err
 
         try:
             with _dbtx.atomic():
@@ -5515,11 +5603,19 @@ class MarketplacePlaceOrderView(APIView):
 
                         # Multi-branch (Phase 3): stamp the restaurant's
                         # branch — payload slug (hub picker) or its default.
-                        # Failure must never block checkout: unstamped.
+                        # Failure must never block checkout: unstamped —
+                        # except an explicit slug naming no active branch
+                        # (R6-17), which is a 400 like the storefront path.
                         try:
                             from menu.order_service import resolve_order_branch as _mkt_resolve_branch
+                            from menu.order_service import BranchUnavailableError as _MktBranchUnavailable
                             _mkt_order_branch = _mkt_resolve_branch(
                                 branch_slug=(request.data.get("branch") or "")
+                            )
+                        except _MktBranchUnavailable:
+                            return Response(
+                                {"detail": "The selected branch is unavailable.", "code": "branch_unavailable"},
+                                status=status.HTTP_400_BAD_REQUEST,
                             )
                         except Exception:
                             _mkt_order_branch = None
@@ -7525,6 +7621,38 @@ class DriverJobAcceptView(APIView):
             job.owner_alerted_at = None
             job.save(update_fields=["driver", "status", "assigned_at", "offered_to", "offer_expires_at", "owner_alerted_at"])
 
+            # R6-12: clear any OTHER live exclusive offers held by this driver
+            # (SEARCHING jobs offered to them, still inside their window) so
+            # their cascades advance immediately instead of stalling until the
+            # 60-s TTL lapses. Collected under the same driver-row lock, so a
+            # concurrent accept can't interleave; the re-roll itself happens
+            # after commit, below.
+            _other_offer_ids = list(
+                DeliveryJob.objects.filter(
+                    driver__isnull=True,
+                    status=DeliveryJob.Status.SEARCHING,
+                    offered_to=customer,
+                    offer_expires_at__gt=_now,
+                ).exclude(pk=job.pk).values_list("id", flat=True)
+            )
+            if _other_offer_ids:
+                DeliveryJob.objects.filter(pk__in=_other_offer_ids).update(
+                    offered_to=None, offer_expires_at=None
+                )
+
+        # R6-12: advance the cleared jobs' cascades now (best-effort, after
+        # commit — each re-roll takes its own row lock and sends its push).
+        if _other_offer_ids:
+            try:
+                from accounts.dispatch import offer_to_next_driver as _offer_next
+                for _other_id in _other_offer_ids:
+                    try:
+                        _offer_next(_other_id)
+                    except Exception:
+                        logger.exception("accept: cascade advance failed for job %s", _other_id)
+            except Exception:
+                logger.exception("accept: cascade advance failed")
+
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
         _bt = job.business_type or "restaurant"
@@ -7699,12 +7827,20 @@ def _credit_driver_noshow(job) -> None:
         )
 
 
-def _complete_delivered_order(job, proof_photo_url="") -> None:
+def _complete_delivered_order(job, proof_photo_url="", cash_collected=None) -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
     prepaid by wallet or cash-collected on handover), store any proof photo, record
     the COD cash collected (D G2), and credit the driver's wallet. Best-effort —
     never blocks the driver.
+
+    R6-10: `cash_collected` is the amount the driver actually took on handover
+    (driver-entered, defaulting to the full outstanding when the client doesn't
+    send one). The order flips to PAID only when collected >= total; a short
+    payment leaves it UNPAID with the recorded partial (visible outstanding for
+    the owner to chase) — the Z-report/drawer only count PAID orders, so the
+    shortfall is never booked as cash. The job records exactly the entered
+    amount. The code/photo gate is unchanged.
     """
     # D G2: the cash the driver collected on handover (0 for prepaid orders).
     # Computed inside the tenant-schema block below (it needs the order + its
@@ -7739,15 +7875,28 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
                 _already = _collected(order)
             except Exception:
                 _already = _D(str(order.wallet_amount_paid or "0"))
-            _cash_collected = max(
-                _D("0"), (_D(str(order.total or "0")) - _already)
-            )
+            _total = _D(str(order.total or "0"))
+            _outstanding = max(_D("0"), (_total - _already))
+            # R6-10: the driver-entered amount wins; None (old clients) defaults to
+            # the full outstanding, today's behaviour. A prepaid order (nothing
+            # outstanding) collects nothing — a stray entered amount is ignored
+            # rather than booking phantom cash.
+            if cash_collected is None:
+                _cash_collected = _outstanding
+            else:
+                _cash_collected = max(_D("0"), _D(str(cash_collected)))
+                if _already >= _total:
+                    _cash_collected = _D("0")
             fields = []
             if order.status != _O.Status.COMPLETED:
                 order.status = _O.Status.COMPLETED
                 order.status_updated_at = _tz.now()
                 fields += ["status", "status_updated_at"]
-            if order.payment_status != _O.PaymentStatus.PAID:
+            # R6-10: PAID only when the collection covers the total. A short
+            # payment leaves the order UNPAID — the outstanding stays visible for
+            # the owner to chase, and the Z-report/drawer never count it as cash.
+            _fully_collected = (_already + _cash_collected) >= _total
+            if order.payment_status != _O.PaymentStatus.PAID and _fully_collected:
                 order.payment_status = _O.PaymentStatus.PAID
                 order.paid_at = _tz.now()
                 fields += ["payment_status", "paid_at"]
@@ -7853,6 +8002,28 @@ class DriverJobStatusUpdateView(APIView):
         now = _tz.now()
         _proof_photo_url = ""
         _proof_photo_error = None
+
+        # R6-10: the cash the driver actually collected on handover (COD). Parsed
+        # + validated BEFORE the lock so a bad amount 400s without flipping the
+        # job. None = the client didn't send one (old app versions) → the helper
+        # defaults to the full outstanding, today's behaviour.
+        _cash_collected_input = None
+        if new_status == DeliveryJob.Status.DELIVERED:
+            _raw_cash = request.data.get("cash_collected")
+            if _raw_cash is not None and str(_raw_cash).strip() != "":
+                try:
+                    from decimal import Decimal as _D
+                    _cash_collected_input = _D(str(_raw_cash).strip())
+                except Exception:
+                    return Response(
+                        {"detail": "cash_collected must be a number.", "code": "bad_cash_collected"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if _cash_collected_input < 0:
+                    return Response(
+                        {"detail": "cash_collected can't be negative.", "code": "bad_cash_collected"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         # PERF (connection-pool): a proof photo is a Pillow transcode of up to 8 MB + a
         # (possibly S3) storage write — 200 ms-2 s of pure I/O. Do it BEFORE taking the
@@ -7988,6 +8159,11 @@ class DriverJobStatusUpdateView(APIView):
 
             job.status = new_status
             update_fields = ["status"]
+            if new_status == DeliveryJob.Status.AT_RESTAURANT:
+                # R6-06: stamp the arrival — the (c2) pickup-SLA wait is measured
+                # from here, not from assignment.
+                job.at_restaurant_at = now
+                update_fields.append("at_restaurant_at")
             if new_status == DeliveryJob.Status.PICKED_UP:
                 job.picked_up_at = now
                 update_fields.append("picked_up_at")
@@ -8013,7 +8189,8 @@ class DriverJobStatusUpdateView(APIView):
             # without a manual re-toggle. (Previously this forced is_driver_online=False,
             # benching the driver after every drop — the offer model already lets them
             # decline, so staying online never forces work on them.)
-            _complete_delivered_order(job, proof_photo_url=_proof_photo_url)
+            _complete_delivered_order(job, proof_photo_url=_proof_photo_url,
+                                      cash_collected=_cash_collected_input)
             _notify_customer_milestone(job, "delivered")
         elif new_status == DeliveryJob.Status.FAILED:
             # Same as DELIVERED: a FAILED job leaves ACTIVE_STATUSES, so the driver is freed
@@ -10381,7 +10558,10 @@ class CustomerTopUpWebhookView(APIView):
         # convenience. Checked BEFORE importing stripe so the guard holds even where the SDK
         # isn't installed.
         if not webhook_secret and not settings.DEBUG:
-            logger.error(
+            # R6-19: same payments channel as the other webhook failure paths
+            # (signature failure, bad JSON) — the operator's payments alert
+            # must see this one too.
+            payments_logger.error(
                 "TOPUP_WEBHOOK_FAILED status=503: PSP_TOPUP_ENABLED but "
                 "PSP_STRIPE_WEBHOOK_SECRET is unset"
             )

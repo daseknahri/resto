@@ -466,6 +466,56 @@ class DrawerCloseViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, 200)
 
+    @patch("menu.views.split_revenue_for_orders")
+    @patch("menu.views.Order")
+    @patch("menu.views.DrawerSession")
+    @patch("menu.views._is_tenant_owner", return_value=True)
+    def test_close_counts_paid_uncompleted_cash(self, mock_owner, mock_ds, mock_order, mock_split):
+        """R6-01: a PAID order still PREPARING at close is cash in the till — the
+        drawer counts cash by paid_at alone, so the collected filter must NOT
+        require status=COMPLETED."""
+        session = MagicMock()
+        session.id = 1
+        session.status = "open"
+        session.opened_by_name = "Alice"
+        session.opening_float = Decimal("100.00")
+        session.opened_at = datetime(2024, 1, 1, 8, 0, tzinfo=_tz.utc)
+        session.closed_by_name = ""
+        session.note = ""
+
+        mock_ds.Status.OPEN = "open"
+        mock_ds.Status.CLOSED = "closed"
+        mock_ds.objects.select_for_update.return_value.filter.return_value.order_by.return_value.first.return_value = session
+
+        mock_order.Status.COMPLETED = "completed"
+        mock_order.PaymentStatus.PAID = "paid"
+        mock_order.objects.filter.return_value = MagicMock()
+
+        # Cash collected = 100 (the still-PREPARING PAID order), float 100.
+        mock_split.return_value = {"cash": Decimal("100.00"), "wallet": Decimal("0.00")}
+
+        req = _make_owner_request("POST", {"counted_total": "200.00"})
+
+        with patch("menu.views._compute_expected_total", return_value=Decimal("200.00")) as mock_expected:
+            with patch("menu.views.transaction") as mock_txn:
+                mock_txn.atomic.return_value.__enter__ = lambda s: None
+                mock_txn.atomic.return_value.__exit__ = MagicMock(return_value=False)
+                with patch("menu.views.timezone") as mock_tz:
+                    mock_tz.now.return_value = datetime(2024, 1, 1, 18, 0, tzinfo=_tz.utc)
+                    resp = DrawerCloseView().post(req)
+
+        self.assertEqual(resp.status_code, 200)
+        # The collected filter counts by paid_at alone: no status predicate,
+        # PAID status + the session window still present.
+        filter_kwargs = mock_order.objects.filter.call_args.kwargs
+        self.assertNotIn("status", filter_kwargs)
+        self.assertEqual(filter_kwargs.get("payment_status"), "paid")
+        self.assertIn("paid_at__gte", filter_kwargs)
+        self.assertIn("paid_at__lte", filter_kwargs)
+        self.assertEqual(filter_kwargs["paid_at__gte"], session.opened_at)
+        # The still-uncompleted order's cash reached the expected total.
+        self.assertEqual(mock_expected.call_args.args[1], Decimal("100.00"))
+
     @patch("menu.views.DrawerSession")
     @patch("menu.views._is_tenant_owner", return_value=True)
     def test_404_no_open_session(self, mock_owner, mock_ds):

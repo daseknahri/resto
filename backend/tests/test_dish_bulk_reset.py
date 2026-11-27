@@ -145,3 +145,55 @@ class DishBulkAvailabilityResetViewTests(SimpleTestCase):
         self.assertIn("stock_auto_zeroed", update_kwargs,
                       "availability reset must clear stock_auto_zeroed to prevent cron re-zero")
         self.assertFalse(update_kwargs["stock_auto_zeroed"])
+
+# ── R6-27: bulk writes bust the menu cache ─────────────────────────────────
+# A single-dish edit busts menu_ver immediately; the bulk paths only changed
+# the DB, so the public QR menu showed old availability for up to 60 s.
+from menu.views import DishBulkMarkUnavailableView, DishBulkResetAvailabilityView
+
+
+class BulkAvailabilityBustTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    def _post(self, view_cls, url, body=None):
+        req = self.factory.post(url, body or {}, format="json")
+        user = _owner()
+        force_authenticate(req, user=user)
+        req.user = user
+        req.tenant = SimpleNamespace(id=1, slug="demo")
+        return view_cls.as_view()(req)
+
+    @patch("menu.views._bust_menu_cache")
+    @patch("menu.views.Dish.objects")
+    def test_bare_reset_busts_menu_cache(self, dish_objects, mock_bust):
+        dish_objects.filter.side_effect = [_filter_mock(4), _filter_mock(2)]
+        resp = self._post(
+            DishBulkAvailabilityResetView, "/api/owner/dishes/reset-availability/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_bust.assert_called_once_with("demo")
+
+    @patch("menu.views._bust_menu_cache")
+    @patch("menu.views.Dish.objects")
+    def test_scoped_reset_busts_menu_cache(self, dish_objects, mock_bust):
+        dish_objects.filter.side_effect = [_filter_mock(2), _filter_mock(1)]
+        resp = self._post(
+            DishBulkResetAvailabilityView,
+            "/api/owner/dishes/bulk-reset-availability/",
+            {"dish_ids": [12, 27]},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["restored"], 2)
+        mock_bust.assert_called_once_with("demo")
+
+    @patch("menu.views._bust_menu_cache")
+    @patch("menu.views.Dish.objects")
+    def test_mark_all_unavailable_busts_menu_cache(self, dish_objects, mock_bust):
+        dish_objects.filter.return_value.update.return_value = 5
+        resp = self._post(
+            DishBulkMarkUnavailableView, "/api/owner/dishes/mark-all-unavailable/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["marked"], 5)
+        mock_bust.assert_called_once_with("demo")

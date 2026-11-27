@@ -126,8 +126,9 @@ describe("OwnerTables — mount smoke", () => {
 
   // ── (2) loaded: active + disabled tables ──────────────────────────────────
   // Drives the grid v-for + the per-table computeds/branches (filteredTables,
-  // activeTablesCount, the status-pill ternary, tableShortUrl/tableFullMenuUrl,
-  // tableQrSrc) — the own-template paths that only run with a non-empty array.
+  // activeTablesCount, the status-pill ternary, tableShortUrl, tableQrSrc) —
+  // the own-template paths that only run with a non-empty array. (R6-30: the
+  // full-menu URL is gone — one URL per table, the short /t/<slug> link.)
   it("mounts with active + disabled tables and renders them without a crash", async () => {
     _routes = {
       "/tables/": {

@@ -534,4 +534,40 @@ describe("OwnerHome — G4b-E (B-31 tenant-tz today, B-35 translated time-ago)",
     expect(text).not.toContain("5m");
     expect(text).not.toContain("2h");
   });
+
+  // R6-26: a blank-timezone tenant buckets in UTC on the backend (Contract E),
+  // so _tenantDayStr must look up the UTC date, not the owner's device-local
+  // date. Frozen at 2026-11-16T02:30:00Z: the UTC date is 2026-11-16, but the
+  // device (America/Chicago, the dev laptop's zone) still reads 2026-11-15
+  // 20:30 — the old toDateString() fallback looked up 2026-11-15 and rendered
+  // the wrong day's figures. (On a UTC host the two agree and the test passes
+  // either way; it discriminates on the dev laptop's zone.)
+  it("looks up today's figures by the UTC date when the tenant timezone is blank (R6-26)", async () => {
+    vi.setSystemTime(new Date("2026-11-16T02:30:00Z"));
+    _routes = {
+      "/meta/": { data: { profile: { is_menu_published: true, is_open: true, timezone: "" } } },
+      "/owner/orders/": { data: { results: [], total: 0 } },
+      "/owner/dashboard/": {
+        data: {
+          revenue_summary: {
+            currency: "MAD",
+            daily: [
+              { date: "2026-11-15", revenue: 11111, orders: 11 },
+              { date: "2026-11-16", revenue: 98765, orders: 42 },
+            ],
+          },
+        },
+      },
+    };
+
+    wrapper = mountHome();
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("98765"); // today's revenue, UTC date
+    expect(text).toContain("42"); // today's order count, UTC date
+    expect(text).not.toContain("11111"); // yesterday's (device-date) figures
+  });
 });

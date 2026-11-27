@@ -243,6 +243,66 @@ class OwnerOrderListViewTests(SimpleTestCase):
         self.assertTrue(dj_filter.called)
         self.assertIn("ORD-DIRECT-1", dj_filter.call_args.kwargs.get("order_number__in", []))
 
+    @patch("accounts.models.DeliveryJob")
+    @patch("menu.views.Order.objects")
+    def test_picked_up_silent_driver_flagged(self, objects_mock, dj_mock):
+        """R6-11: a PICKED_UP job whose driver hasn't updated position for 70 min is
+        flagged driver_silent on the owner orders list (a distinct state, not just
+        'picked up')."""
+        from datetime import timedelta
+        from django.utils import timezone
+        order = _make_order(number="ORD-1", fulfillment_type="delivery")
+        qs_mock = MagicMock()
+        qs_mock.filter.return_value = qs_mock
+        qs_mock.__iter__ = lambda s: iter([order])
+        qs_mock.__getitem__ = lambda s, sl: [order][sl.start:sl.stop] if isinstance(sl, slice) else [order][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+
+        # The driver_silent helper reads the (mocked) DeliveryJob enum through
+        # accounts.models — give it the real value, as the sweep tests do.
+        dj_mock.Status.PICKED_UP = "picked_up"
+        job = MagicMock()
+        job.order_number = "ORD-1"
+        job.status = "picked_up"
+        job.picked_up_at = timezone.now() - timedelta(minutes=70)
+        job.driver = MagicMock(driver_position_updated_at=timezone.now() - timedelta(minutes=70))
+        dj_mock.objects.select_related.return_value.filter.return_value = [job]
+
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["results"][0]["delivery_job"]["driver_silent"])
+
+    @patch("accounts.models.DeliveryJob")
+    @patch("menu.views.Order.objects")
+    def test_picked_up_live_driver_not_flagged(self, objects_mock, dj_mock):
+        """R6-11 control: PICKED_UP 20 min ago with a fresh fix is not silent."""
+        from datetime import timedelta
+        from django.utils import timezone
+        order = _make_order(number="ORD-1", fulfillment_type="delivery")
+        qs_mock = MagicMock()
+        qs_mock.filter.return_value = qs_mock
+        qs_mock.__iter__ = lambda s: iter([order])
+        qs_mock.__getitem__ = lambda s, sl: [order][sl.start:sl.stop] if isinstance(sl, slice) else [order][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+
+        dj_mock.Status.PICKED_UP = "picked_up"
+        job = MagicMock()
+        job.order_number = "ORD-1"
+        job.status = "picked_up"
+        job.picked_up_at = timezone.now() - timedelta(minutes=20)
+        job.driver = MagicMock(driver_position_updated_at=timezone.now() - timedelta(minutes=1))
+        dj_mock.objects.select_related.return_value.filter.return_value = [job]
+
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["results"][0]["delivery_job"]["driver_silent"])
+
     @patch("menu.views.Order.objects")
     def test_status_filter_applied_when_valid(self, objects_mock):
         # OPS-4 A: when ?status=pending the view calls qs.filter(status="pending")

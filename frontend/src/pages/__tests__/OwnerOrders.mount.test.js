@@ -216,9 +216,9 @@ import api from "../../lib/api";
 import { useConfirmModal } from "../../composables/useConfirmModal";
 
 // Today's date exactly the way the page buckets it with no tenant timezone set
-// (device-local YYYY-MM-DD, matching _tenantDayIso in OwnerOrders.vue).
-const _todayStr = () =>
-  new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+// (UTC YYYY-MM-DD, matching _tenantDayIso in OwnerOrders.vue — R6-26: a blank
+// timezone buckets in UTC on the backend, so the frontend looks up UTC too).
+const _todayStr = () => new Date().toISOString().slice(0, 10);
 
 // The header stats bar renders exactly three `p.text-2xl` cells, in order:
 // [today count, today revenue, today pending]. (The h1 title is an h1, not a p,

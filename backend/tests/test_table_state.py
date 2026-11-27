@@ -77,6 +77,7 @@ def _make_order(
     payment_status=Order.PaymentStatus.UNPAID,
     total=Decimal("20.00"),
     items=None,
+    branch_id=None,
 ):
     o = MagicMock(spec=Order)
     o.pk = pk
@@ -98,6 +99,7 @@ def _make_order(
     o.owner_note = ""
     o.table_label = "T1"
     o.table_slug = "t1"
+    o.branch_id = branch_id
     o.handled_by_user_id = None
     o.estimated_ready_minutes = None
     o.scheduled_for = None
@@ -365,6 +367,29 @@ class StaffTransferItemsViewTests(SimpleTestCase):
             self.assertIn("pk__in=[src_order_id, dest_order_id]", _src)
             self.assertIn('order_by("pk")', _src)
 
+    @patch("menu.views._recompute_order_totals")
+    def test_cross_branch_is_409(self, recompute_mock):
+        """R6-18: moving items between two physical locations' tabs is refused —
+        the destination branch's kitchen would gain items the source branch may
+        already be cooking. Nothing moves; neither order changes."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1], branch_id=5)
+        dest = _make_order(pk=2, order_number="ORD-002", branch_id=9)
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [src, dest]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            resp = self._post(1, {"item_ids": [10], "dest_order_id": 2})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "cross_branch")
+        oi_model.objects.filter.return_value.update.assert_not_called()
+        self.assertEqual(src.status, Order.Status.PENDING)
+
     @patch("menu.views._can_edit_tenant_order", return_value=False)
     def test_no_perm_is_403(self, _mock):
         resp = self._post(1, {"item_ids": [1], "dest_order_id": 2})
@@ -571,6 +596,31 @@ class StaffMergeOrdersViewTests(SimpleTestCase):
             resp = self._post(2, {"src_order_id": 1})
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data["code"], "source_has_payment")
+        oi_model.objects.filter.return_value.update.assert_not_called()
+        self.assertNotEqual(src.status, Order.Status.CANCELLED)
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._staff_order_payload", return_value={"id": 2})
+    @patch("menu.views._recompute_order_totals")
+    def test_cross_branch_is_409(self, recompute_mock, payload_mock, broadcast_mock):
+        """R6-18: merging tabs from two different branches is refused — food
+        must not move between kitchens. Nothing moves; the source is NOT
+        cancelled."""
+        item1 = _make_item(pk=10, order_id=1)
+        src = _make_order(pk=1, items=[item1], branch_id=5)
+        dest = _make_order(pk=2, order_number="ORD-002", branch_id=9)
+        with patch("django.db.transaction.atomic") as tx_mock, \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.models.OrderItem") as oi_model:
+            tx_mock.return_value.__enter__ = MagicMock(return_value=None)
+            tx_mock.return_value.__exit__ = MagicMock(return_value=False)
+            locked = MagicMock()
+            locked.prefetch_related.return_value.filter.return_value.order_by.return_value = [dest, src]
+            om.select_for_update.return_value = locked
+            oi_model.objects.filter.return_value.update = MagicMock()
+            resp = self._post(2, {"src_order_id": 1})
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "cross_branch")
         oi_model.objects.filter.return_value.update.assert_not_called()
         self.assertNotEqual(src.status, Order.Status.CANCELLED)
 

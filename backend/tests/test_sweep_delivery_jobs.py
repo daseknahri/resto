@@ -26,7 +26,7 @@ def _noop_cm(*args, **kwargs):
 def _job(*, job_id=1, tenant_id=1, order="ORD-1", status="assigned",
          driver_id=99, redispatch_count=0, assigned_at=None, failed_at=None,
          owner_alerted_at=None, failure_reason="customer_no_show", food_ready_at=None,
-         created_at=None):
+         created_at=None, at_restaurant_at=None):
     j = MagicMock()
     j.id = job_id
     j.pk = job_id
@@ -39,6 +39,7 @@ def _job(*, job_id=1, tenant_id=1, order="ORD-1", status="assigned",
     j.created_at = created_at
     j.failed_at = failed_at
     j.food_ready_at = food_ready_at
+    j.at_restaurant_at = at_restaurant_at
     j.owner_alerted_at = owner_alerted_at
     j.failure_reason = failure_reason
     j.get_failure_reason_display.return_value = "Customer not reachable / no-show"
@@ -74,7 +75,9 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
         return count, alert_owner, offer, locked_job
 
     def test_idle_assigned_driver_past_sla_is_released(self):
-        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=20))
+        # R6-06: ASSIGNED jobs get the 30-min en-route allowance now, not the
+        # 15-min pickup SLA — 20 min en route is still driving, not idle.
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=40))
         count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
         self.assertEqual(count, 1)
         self.assertIsNone(locked.driver)
@@ -85,14 +88,47 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
         offer.assert_called_once_with(job.id)
         alert_owner.assert_called_once()
 
+    def test_assigned_driver_within_en_route_allowance_is_held(self):
+        """R6-06 (pack sketch): ASSIGNED 16 min ago, food ready 20 min ago, driver
+        position fresh → NOT released. Under the old single 15-min clock this job
+        released 1 minute before arrival; the en-route allowance covers the drive."""
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=16),
+                   food_ready_at=_NOW - timedelta(minutes=20))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 0)
+        offer.assert_not_called()
+        alert_owner.assert_not_called()
+        self.assertEqual(locked.status, "assigned")
+
     def test_idle_at_restaurant_driver_past_sla_is_released(self):
-        """AT_RESTAURANT counts too: the SLA is measured from assigned_at (there is no
-        at_restaurant_at timestamp), so a driver parked at the restaurant is idle."""
-        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=20))
+        """R6-06: AT_RESTAURANT counts too — the 15-min wait is now measured from
+        ARRIVAL (at_restaurant_at), so a driver parked at the restaurant past the
+        wait is idle."""
+        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=40),
+                   at_restaurant_at=_NOW - timedelta(minutes=20))
         count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
         self.assertEqual(count, 1)
         self.assertEqual(locked.status, "searching")
         offer.assert_called_once_with(job.id)
+
+    def test_at_restaurant_driver_past_arrival_sla_is_released(self):
+        """R6-06 (pack sketch): AT_RESTAURANT with at_restaurant_at 16 min ago →
+        released (the 15-min wait from arrival has passed)."""
+        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=30),
+                   at_restaurant_at=_NOW - timedelta(minutes=16))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 1)
+        self.assertEqual(locked.status, "searching")
+        offer.assert_called_once_with(job.id)
+
+    def test_at_restaurant_without_arrival_stamp_falls_back_to_en_route(self):
+        """R6-06: legacy AT_RESTAURANT rows (no at_restaurant_at) fall back to the
+        en-route clock — assigned 20 min ago is still within the 30-min allowance."""
+        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=20))
+        count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
+        self.assertEqual(count, 0)
+        offer.assert_not_called()
+        self.assertEqual(locked.status, "at_restaurant")
 
     def test_driver_within_sla_is_left_alone(self):
         """Assigned 5 min ago (SLA 15): the under-lock re-check refuses the release."""
@@ -105,7 +141,7 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
     def test_capped_job_escalates_instead_of_releasing(self):
         """Past MAX_AUTO_REDISPATCH (3) cycles: no more re-offers — alert the owner once
         and leave the job assigned for a manual reassign/refund."""
-        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=20),
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=40),
                    redispatch_count=3, owner_alerted_at=None)
         count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
         self.assertEqual(count, 0)
@@ -122,8 +158,10 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
         alert_owner.assert_not_called()
 
     def test_sla_is_configurable_from_settings(self):
-        """DELIVERY_PICKUP_SLA_MINUTES=30: a driver idle 20 min is still within SLA."""
-        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=20))
+        """R6-06: DELIVERY_PICKUP_SLA_MINUTES=30 governs the ARRIVAL wait — an
+        AT_RESTAURANT driver waiting 20 min is still within a 30-min wait."""
+        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=40),
+                   at_restaurant_at=_NOW - timedelta(minutes=20))
         count, alert_owner, offer, locked = self._run(
             candidate=job, locked_job=job, sla_minutes=30
         )
@@ -137,21 +175,30 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
 
     # Wave L L-02: food-aware pickup SLA
 
-    def test_food_not_ready_holds_driver_past_assigned_sla(self):
-        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=20),
+    def test_at_restaurant_food_not_ready_holds_driver(self):
+        """R6-06: L-02 preserved in the arrival branch — an AT_RESTAURANT driver
+        who arrived 20 min ago while the food is still cooking (ready in 10 min)
+        is NOT released: the wait only counts from the later of arrival and
+        food-ready."""
+        job = _job(status="at_restaurant", assigned_at=_NOW - timedelta(minutes=40),
+                   at_restaurant_at=_NOW - timedelta(minutes=20),
                    food_ready_at=_NOW + timedelta(minutes=10))
         count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
         self.assertEqual(count, 0)
         offer.assert_not_called()
         alert_owner.assert_not_called()
-        self.assertEqual(locked.status, "assigned")
+        self.assertEqual(locked.status, "at_restaurant")
 
-    def test_food_ready_within_sla_is_not_released(self):
+    def test_assigned_release_ignores_food_ready_time(self):
+        """R6-06: the en-route allowance is measured FROM ASSIGNMENT — food
+        readiness doesn't slow the drive. Assigned 40 min ago with food ready
+        5 min ago → released (the drive, not the wait, is overdue)."""
         job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=40),
                    food_ready_at=_NOW - timedelta(minutes=5))
         count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
-        self.assertEqual(count, 0)
-        offer.assert_not_called()
+        self.assertEqual(count, 1)
+        self.assertEqual(locked.status, "searching")
+        offer.assert_called_once_with(job.id)
 
     def test_food_ready_past_sla_is_released(self):
         job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=40),
@@ -174,7 +221,7 @@ class ReleaseIdleAssignedJobsTests(SimpleTestCase):
         """Wave M M-15: (c2) falls back to created_at — a job assigned_at=None
         but created 20 min ago is past the 15-min SLA."""
         job = _job(status="assigned", assigned_at=None,
-                   created_at=_NOW - timedelta(minutes=20))
+                   created_at=_NOW - timedelta(minutes=40))
         count, alert_owner, offer, locked = self._run(candidate=job, locked_job=job)
         self.assertEqual(count, 1)
         self.assertEqual(locked.status, "searching")
@@ -242,29 +289,60 @@ class PrePickupReleaseDueTests(SimpleTestCase):
 
 
 class RealertFailedJobsTests(SimpleTestCase):
-    def _run(self, *, candidate, claimed=1):
+    def _run(self, *, candidate, claimed=1, order_is_terminal=None):
         """Drive Command._realert_failed_jobs.
 
         candidate: the FAILED job the scan yields (or None). claimed: what the atomic
         owner_alerted_at claim returns (1 = this caller won the throttle, 0 = already
-        alerted within the hour). Returns (count, alert_owner_mock).
+        alerted within the hour). order_is_terminal: injectable R6-05 order check
+        (None = the real tenant-schema read, which fail-opens to False under
+        SimpleTestCase's no-DB rule). Returns (count, alert_owner_mock, DJ mock).
         """
         alert_owner = MagicMock()
         with patch("accounts.models.DeliveryJob") as DJ:
             DJ.Status.FAILED = "failed"
-            DJ.Resolution.REFUNDED_CANCELLED = "refunded_cancelled"
-            DJ.objects.filter.return_value.exclude.return_value = (
-                [candidate] if candidate else []
-            )
-            (DJ.objects.filter.return_value.filter.return_value
-                .update.return_value) = claimed
-            count = Command()._realert_failed_jobs(_NOW, alert_owner)
-        return count, alert_owner
+            scan = MagicMock()
+            scan.__iter__.return_value = iter([candidate] if candidate else [])
+            scan.filter.return_value.update.return_value = claimed
+            DJ.objects.filter.return_value = scan
+            count = Command()._realert_failed_jobs(
+                _NOW, alert_owner, order_is_terminal=order_is_terminal)
+        return count, alert_owner, DJ
+
+    def test_scan_only_targets_blank_resolution_jobs(self):
+        """R6-22: the scan filters resolution='' — a FAILED job whose owner already
+        decided (NOSHOW_PAID, REFUNDED_CANCELLED, any stamped resolution) is never
+        even scanned, so it can't re-alert hourly forever."""
+        job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=None)
+        count, alert_owner, DJ = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)  # blank-resolution control still alerts
+        scan_kwargs = DJ.objects.filter.call_args_list[0].kwargs
+        self.assertEqual(scan_kwargs.get("resolution"), "")
+
+    def test_failed_job_with_completed_order_is_not_realerted(self):
+        """R6-05: the owner resolved this FAILED job by completing the order
+        themselves — no hourly 'still failed' nag."""
+        job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=None)
+        count, alert_owner, _DJ = self._run(
+            candidate=job, claimed=1, order_is_terminal=lambda tid, num: True)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_failed_job_with_live_order_still_realerts(self):
+        """R6-05 control: the order check says 'not resolved' → the alert fires."""
+        job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=None)
+        count, alert_owner, _DJ = self._run(
+            candidate=job, claimed=1, order_is_terminal=lambda tid, num: False)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
 
     def test_failed_job_past_an_hour_realerts(self):
         job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
                    owner_alerted_at=None)
-        count, alert_owner = self._run(candidate=job, claimed=1)
+        count, alert_owner, _DJ = self._run(candidate=job, claimed=1)
         self.assertEqual(count, 1)
         alert_owner.assert_called_once()
         _args, _kwargs = alert_owner.call_args
@@ -276,12 +354,12 @@ class RealertFailedJobsTests(SimpleTestCase):
         second alert — the throttle is the atomic update, not a re-read."""
         job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
                    owner_alerted_at=_NOW - timedelta(minutes=30))
-        count, alert_owner = self._run(candidate=job, claimed=0)
+        count, alert_owner, _DJ = self._run(candidate=job, claimed=0)
         self.assertEqual(count, 0)
         alert_owner.assert_not_called()
 
     def test_no_failed_jobs_is_noop(self):
-        count, alert_owner = self._run(candidate=None)
+        count, alert_owner, _DJ = self._run(candidate=None)
         self.assertEqual(count, 0)
         alert_owner.assert_not_called()
 
@@ -437,3 +515,204 @@ class BackfillMissingJobsTests(SimpleTestCase):
         )
         self.assertEqual(count, 0)
         DJ.objects.get_or_create.assert_not_called()
+
+
+# ── R6-23: capped pre-pickup jobs re-alert hourly ─────────────────────────────
+
+class RealertCappedAssignedJobsTests(SimpleTestCase):
+    def _run(self, *, candidate, claimed=1):
+        """Drive Command._realert_capped_assigned_jobs.
+
+        candidate: the capped ASSIGNED/AT_RESTAURANT job the scan yields (or None).
+        claimed: what the atomic owner_alerted_at claim returns. Returns
+        (count, alert_owner_mock, DJ mock).
+        """
+        alert_owner = MagicMock()
+        with patch("accounts.models.DeliveryJob") as DJ:
+            DJ.Status.ASSIGNED = "assigned"
+            DJ.Status.AT_RESTAURANT = "at_restaurant"
+            scan = MagicMock()
+            scan.__iter__.return_value = iter([candidate] if candidate else [])
+            scan.filter.return_value.update.return_value = claimed
+            DJ.objects.filter.return_value = scan
+            count = Command()._realert_capped_assigned_jobs(_NOW, alert_owner)
+        return count, alert_owner, DJ
+
+    def test_capped_job_past_an_hour_realerts(self):
+        """R6-23: ASSIGNED, redispatch_count=3, first escalated 2 h ago → 1 re-alert
+        (the (c)/(c2) once-only escalation no longer means silence forever)."""
+        job = _job(status="assigned", redispatch_count=3,
+                   owner_alerted_at=_NOW - timedelta(minutes=120))
+        count, alert_owner, DJ = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
+        _args, _kwargs = alert_owner.call_args
+        self.assertEqual(_args[1], "ORD-1")
+        self.assertIn("still needs attention", _args[2])
+        scan_kwargs = DJ.objects.filter.call_args_list[0].kwargs
+        self.assertEqual(scan_kwargs.get("redispatch_count__gte"), 3)
+        self.assertTrue(scan_kwargs.get("picked_up_at__isnull"))
+
+    def test_alert_within_the_hour_is_throttled(self):
+        """The claim lost (escalated < 1 h ago by a previous run): no second alert."""
+        job = _job(status="assigned", redispatch_count=3,
+                   owner_alerted_at=_NOW - timedelta(minutes=30))
+        count, alert_owner, _DJ = self._run(candidate=job, claimed=0)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_no_capped_jobs_is_noop(self):
+        count, alert_owner, _DJ = self._run(candidate=None)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+
+# ── R6-24: rule (c) under-lock re-check uses the FRESH driver row ─────────────
+
+class RuleCFreshDriverTests(SimpleTestCase):
+    """Drive the full sweep handle() with the DB collaborators mocked: the scan
+    sees the driver OFFLINE, but the under-lock fresh read says back ONLINE with
+    a fresh GPS fix → the job must NOT be released."""
+
+    def _run_handle(self, *, fresh_online, fresh_pos_at):
+        from types import SimpleNamespace
+        alert_owner = MagicMock()
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=3),
+                   created_at=_NOW - timedelta(minutes=40))
+        # Scanned driver row: offline + stale GPS (so the pre-lock gate says due).
+        job.driver = SimpleNamespace(
+            is_driver_online=False,
+            driver_position_updated_at=_NOW - timedelta(minutes=20))
+        scan = MagicMock()
+        scan.__iter__.return_value = iter([])
+        scan.select_related.return_value = [job]
+        with patch("accounts.models.DeliveryJob") as DJ, \
+                patch("accounts.dispatch.expire_and_cascade_stale_offers", return_value=0), \
+                patch("accounts.dispatch.offer_to_next_driver") as offer, \
+                patch("accounts.push.push_new_job_to_drivers"), \
+                patch("accounts.tasks.enqueue") as enqueue, \
+                patch("accounts.notifications.record_notification"), \
+                patch("tenancy.models.Tenant") as mock_tenant, \
+                patch("accounts.models.DriverCashoutRequest"), \
+                patch("django.core.cache.cache"), \
+                patch("django.db.transaction.atomic", _noop_cm), \
+                patch("accounts.management.commands.sweep_delivery_jobs.timezone") as mock_tz, \
+                patch("accounts.management.commands.sweep_delivery_jobs._fresh_driver_state",
+                      return_value=(fresh_online, fresh_pos_at)) as fresh:
+            mock_tz.now.return_value = _NOW
+            for name, val in [
+                ("SEARCHING", "searching"), ("ASSIGNED", "assigned"),
+                ("AT_RESTAURANT", "at_restaurant"), ("PICKED_UP", "picked_up"),
+                ("DELIVERED", "delivered"), ("FAILED", "failed"),
+                ("CANCELLED", "cancelled"),
+            ]:
+                setattr(DJ.Status, name, val)
+            DJ.Resolution.REFUNDED_CANCELLED = "refunded_cancelled"
+            DJ.objects.filter.return_value = scan
+            (DJ.objects.select_for_update.return_value
+                .filter.return_value.first.return_value) = job
+            mock_tenant.objects.filter.return_value.exclude.return_value.select_related.return_value = []
+            Command().handle()
+        return job, offer, enqueue, fresh
+
+    def test_driver_back_online_between_scan_and_lock_is_not_released(self):
+        """R6-24: scan says offline, fresh under-lock read says online + GPS 1 min
+        old → not released, no re-offer, no alert."""
+        job, offer, enqueue, fresh = self._run_handle(
+            fresh_online=True, fresh_pos_at=_NOW - timedelta(minutes=1))
+        fresh.assert_called_once_with(job.driver_id)
+        self.assertEqual(job.status, "assigned")
+        job.save.assert_not_called()
+        offer.assert_not_called()
+        enqueue.assert_not_called()
+
+    def test_driver_still_offline_between_scan_and_lock_is_released(self):
+        """Control: the fresh read agrees (offline + stale GPS) → the release proceeds."""
+        job, offer, enqueue, fresh = self._run_handle(
+            fresh_online=False, fresh_pos_at=_NOW - timedelta(minutes=20))
+        fresh.assert_called_once_with(job.driver_id)
+        self.assertEqual(job.status, "searching")
+        offer.assert_called_with(job.id)
+
+
+# ── R6-11: watch-only alerts for silent picked-up drivers ─────────────────────
+
+class WatchSilentPickedUpJobsTests(SimpleTestCase):
+    def _run(self, *, candidate, claimed=1):
+        """Drive Command._watch_silent_picked_up_jobs.
+
+        candidate: the PICKED_UP job the scan yields (or None). claimed: what the
+        atomic owner_alerted_at claim returns. Returns (count, alert_owner_mock).
+        """
+        from types import SimpleNamespace
+        alert_owner = MagicMock()
+        with patch("accounts.models.DeliveryJob") as DJ:
+            DJ.Status.PICKED_UP = "picked_up"
+            scan = MagicMock()
+            scan.select_related.return_value = [candidate] if candidate else []
+            scan.filter.return_value.update.return_value = claimed
+            DJ.objects.filter.return_value = scan
+            count = Command()._watch_silent_picked_up_jobs(_NOW, alert_owner)
+        return count, alert_owner
+
+    def _picked_up(self, *, picked_min, pos_min, driver=True):
+        from types import SimpleNamespace
+        job = _job(status="picked_up",
+                   created_at=_NOW - timedelta(minutes=picked_min + 10))
+        # The scan feeds the job directly, so picked_up_at must be a real
+        # datetime on the mock (the helper does arithmetic on it).
+        job.picked_up_at = _NOW - timedelta(minutes=picked_min)
+        job.driver = SimpleNamespace(
+            driver_position_updated_at=(
+                _NOW - timedelta(minutes=pos_min) if pos_min is not None else None
+            )
+        ) if driver else None
+        job.owner_alerted_at = None
+        return job
+
+    def test_silent_picked_up_driver_alerts_once(self):
+        """R6-11 (pack sketch): PICKED_UP 70 min ago, position 70 min stale → 1
+        alert, and the job itself is untouched (no status change, no refund)."""
+        job = self._picked_up(picked_min=70, pos_min=70)
+        count, alert_owner = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
+        _args, _kwargs = alert_owner.call_args
+        self.assertEqual(_args[1], "ORD-1")
+        self.assertIn("driver silent", _args[2])
+        self.assertEqual(job.status, "picked_up")
+
+    def test_alert_within_the_hour_is_throttled(self):
+        """Second run within the hour → 0 further alerts."""
+        job = self._picked_up(picked_min=70, pos_min=70)
+        count, alert_owner = self._run(candidate=job, claimed=0)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_fresh_pickup_is_not_alerted(self):
+        """R6-11 (pack sketch): PICKED_UP 5 min ago, position fresh → 0 alerts."""
+        job = self._picked_up(picked_min=5, pos_min=1)
+        count, alert_owner = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_old_pickup_alerts_even_with_fresh_position(self):
+        """The 60-min pickup arm fires on its own: picked up 70 min ago with a
+        fresh fix still needs an owner look (the driver may be circling)."""
+        job = self._picked_up(picked_min=70, pos_min=1)
+        count, alert_owner = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
+
+    def test_recent_pickup_with_stale_position_alerts(self):
+        """The 15-min position arm fires on its own: picked up 20 min ago, no fix
+        for 16 min → the driver went silent after pickup."""
+        job = self._picked_up(picked_min=20, pos_min=16)
+        count, alert_owner = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
+
+    def test_no_silent_jobs_is_noop(self):
+        count, alert_owner = self._run(candidate=None)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()

@@ -104,4 +104,20 @@ describe("DriverDeliveryCodeModal", () => {
     await cancel.trigger("click");
     expect(w.emitted("close")).toBeTruthy();
   });
+
+  // R6-10: cash-collected input — COD jobs only.
+  it("hides the cash input for prepaid jobs and shows it for COD jobs", () => {
+    expect(mountIt({ collectCash: false }).find('input[inputmode="decimal"]').exists()).toBe(false);
+    const w = mountIt({ collectCash: true, orderTotal: 150 });
+    const cash = w.find('input[inputmode="decimal"]');
+    expect(cash.exists()).toBe(true);
+    expect(w.text()).toContain("driver.cashCollectedLabel");
+    expect(w.text()).toContain("driver.cashCollectedHint");
+  });
+
+  it("emits update:cashCollected as the amount is typed", async () => {
+    const w = mountIt({ collectCash: true, orderTotal: 150, cashCollected: "" });
+    await w.find('input[inputmode="decimal"]').setValue("120.5");
+    expect(w.emitted("update:cashCollected")[0]).toEqual(["120.5"]);
+  });
 });

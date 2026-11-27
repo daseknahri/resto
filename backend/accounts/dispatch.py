@@ -48,8 +48,11 @@ def pick_nearest_driver(job, exclude_ids):
     """The closest free, approved, online driver with a fresh GPS fix to the
     pickup point — or None when nobody is rankable (→ caller opens the pool).
 
-    "Free" = no active (assigned/at_restaurant/picked_up) job. ``exclude_ids`` are
-    drivers who already declined/timed-out this job.
+    "Free" = no active (assigned/at_restaurant/picked_up) job AND no live
+    exclusive offer on another SEARCHING job (R6-12: a live offer reserves the
+    driver — two cascades must never offer the same driver at once, or the
+    second accept 409s and the losing job's cascade stalls for the 60-s TTL).
+    ``exclude_ids`` are drivers who already declined/timed-out this job.
     """
     from tenancy.delivery_pricing import haversine_km, valid_coord
     from .models import Customer, DeliveryJob
@@ -84,9 +87,25 @@ def pick_nearest_driver(job, exclude_ids):
         ).values_list("driver_id", flat=True)
     )
 
+    # R6-12: a live exclusive offer reserves the driver. A SEARCHING job with a
+    # live offer_expires_at holds its offeree until the offer lapses or is
+    # declined — offering them a second job just manufactures a 409 on accept
+    # and stalls the losing cascade for the TTL. (The job being offered here
+    # can't match: offer_to_next_driver returns early while its own offer is
+    # live, so by the time pick runs this job holds no live offer. Expired
+    # offers don't reserve — the __gt filter drops them.)
+    reserved = set(
+        DeliveryJob.objects.filter(
+            offered_to_id__in=[c.id for c in candidates],
+            status=DeliveryJob.Status.SEARCHING,
+            is_open_pool=False,
+            offer_expires_at__gt=timezone.now(),
+        ).values_list("offered_to_id", flat=True)
+    )
+
     best, best_km = None, None
     for c in candidates:
-        if c.id in busy or not valid_coord(c.driver_lat, c.driver_lng):
+        if c.id in busy or c.id in reserved or not valid_coord(c.driver_lat, c.driver_lng):
             continue
         km = haversine_km(job.pickup_lat, job.pickup_lng, c.driver_lat, c.driver_lng)
         if best is None or km < best_km:

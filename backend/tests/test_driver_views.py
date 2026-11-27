@@ -854,6 +854,29 @@ class DriverJobAcceptViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIs(job.driver, customer)
 
+    @patch("accounts.dispatch.offer_to_next_driver")
+    @patch("accounts.views._serialize_driver_active_job", return_value={"id": 1, "status": "assigned"})
+    @patch("accounts.views._notify_customer_milestone")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_accept_clears_other_live_offers_and_advances_them(self, mock_cust_objs, mock_dj, _mock_notify, _mock_ser, mock_offer):
+        """R6-12: the driver holds a live exclusive offer on another SEARCHING
+        job (id 42) and accepts this one → the other offer is cleared
+        (offered_to/offer_expires_at → None) and its cascade re-rolls at once,
+        without waiting out the 60-s TTL."""
+        customer = self._fresh_customer()
+        job = self._pool_job()
+        job.id = 9
+        self._wire_accept_job(mock_dj, mock_cust_objs, job)
+        mock_dj.objects.filter.return_value.exclude.return_value.values_list.return_value = [42]
+        with patch("django.db.transaction.atomic", return_value=_noop_atomic()):
+            resp = self._post(9, customer=customer)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_dj.objects.filter.return_value.update.assert_called_once_with(
+            offered_to=None, offer_expires_at=None
+        )
+        mock_offer.assert_called_once_with(42)
+
 # ── DriverJobStatusUpdateView ─────────────────────────────────────────────────
 
 class DriverJobStatusUpdateViewTests(SimpleTestCase):
@@ -947,6 +970,68 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         for _call in customer.save.call_args_list:
             self.assertNotIn("is_driver_online", (_call.kwargs.get("update_fields") or []))
         mock_complete.assert_called_once()
+
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_delivered_passes_cash_collected_through(self, mock_objs, mock_dj, mock_complete):
+        """R6-10: the driver-entered cash amount reaches _complete_delivered_order."""
+        from decimal import Decimal
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
+
+        with patch("accounts.views._order_delivery_code", return_value=("legacy", None)):
+            with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}):
+                with patch("accounts.views._batch_business_types", return_value={}):
+                    with patch("django.utils.timezone.now", return_value=MagicMock()):
+                        resp = self._patch(1, {"status": "delivered", "cash_collected": 100}, customer=customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_complete.assert_called_once()
+        _args, _kwargs = mock_complete.call_args
+        self.assertEqual(_kwargs.get("cash_collected"), Decimal("100"))
+
+    @patch("accounts.views._complete_delivered_order")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_delivered_with_negative_cash_is_rejected(self, mock_objs, mock_dj, mock_complete):
+        """R6-10: a negative cash_collected 400s before the job flips — the helper
+        is never called."""
+        customer = _make_customer()
+        job = _make_job(status_val="picked_up", driver=customer)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
+
+        with patch("accounts.views._order_delivery_code", return_value=("legacy", None)):
+            resp = self._patch(1, {"status": "delivered", "cash_collected": -5}, customer=customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "bad_cash_collected")
+        mock_complete.assert_not_called()
+        self.assertEqual(job.status, "picked_up")  # untouched
+
+    @patch("accounts.models.DeliveryJob")
+    def test_at_restaurant_stamps_arrival(self, mock_dj):
+        """R6-06: the ASSIGNED → AT_RESTAURANT transition stamps at_restaurant_at —
+        the (c2) pickup-SLA wait is measured from arrival, not assignment."""
+        from datetime import datetime, timezone as _tz
+        _now = datetime(2026, 8, 12, 12, 0, tzinfo=_tz.utc)
+        customer = _make_customer()
+        job = _make_job(status_val="assigned", driver=customer)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
+
+        with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "at_restaurant"}):
+            with patch("accounts.views._batch_business_types", return_value={}):
+                with patch("django.utils.timezone.now", return_value=_now):
+                    resp = self._patch(1, {"status": "at_restaurant"}, customer=customer)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(job.at_restaurant_at, _now)
+        _fields = job.save.call_args.kwargs.get("update_fields")
+        self.assertIn("at_restaurant_at", _fields)
 
     @patch("accounts.views._on_job_failed")
     @patch("accounts.models.DeliveryJob")

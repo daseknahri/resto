@@ -245,3 +245,83 @@ describe("OwnerProfile orders tab — business-hours editor (A3-08)", () => {
     expect(useToastStore().message).toContain("orderHandling.hoursInvalidRange");
   });
 });
+
+// ── R6-16: OwnerProfile orders tab — unconfirmed orders (SLA + auto-cancel) ──
+// profileApi / useToastStore / mountProfile / routerState are module-scope
+// bindings imported by the blocks above; this block reuses them.
+describe("OwnerProfile orders tab — unconfirmed orders (R6-16)", () => {
+  let wrapper;
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    routerState.query = { tab: "orders" };
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount();
+    wrapper = undefined;
+    routerState.query = {};
+  });
+
+  const mountOrdersTab = (profile) => {
+    useTenantStore().meta = {
+      name: "Testaurant",
+      profile: {
+        business_type: "restaurant",
+        auto_accept_orders: false,
+        default_prep_minutes: 20,
+        business_hours_schedule: {
+          mon: { enabled: true, open: "09:00", close: "22:00" },
+          tue: { enabled: false, open: null, close: null },
+        },
+        ...profile,
+      },
+    };
+    wrapper = mountProfile();
+    return wrapper;
+  };
+
+  // The order-handling Save is the FIRST "common.save" button on the orders
+  // tab (the hours editor's Save comes second).
+  const orderHandlingSaveButton = () => {
+    const saves = wrapper.findAll("button").filter((b) => b.text().includes("common.save"));
+    return saves[0];
+  };
+
+  it("loads the SLA + auto-cancel values into the unconfirmed-orders inputs", async () => {
+    mountOrdersTab({ pending_sla_minutes: 15, pending_auto_cancel_minutes: 90 });
+    await flushPromises();
+    expect(wrapper.find("#oh-sla").element.value).toBe("15");
+    expect(wrapper.find("#oh-autocancel").element.value).toBe("90");
+  });
+
+  it("saves the SLA + auto-cancel values with the order-handling save", async () => {
+    mountOrdersTab({ pending_sla_minutes: 15, pending_auto_cancel_minutes: 90 });
+    await flushPromises();
+
+    await orderHandlingSaveButton().trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).toHaveBeenCalledTimes(1);
+    expect(profileApi.save.mock.calls[0][0]).toEqual({
+      auto_accept_orders: false,
+      default_prep_minutes: 20,
+      pending_sla_minutes: 15,
+      pending_auto_cancel_minutes: 90,
+    });
+  });
+
+  it("rejects auto-cancel <= SLA without calling the API", async () => {
+    mountOrdersTab({ pending_sla_minutes: 10, pending_auto_cancel_minutes: 90 });
+    await flushPromises();
+
+    await wrapper.find("#oh-autocancel").setValue(5);
+    await orderHandlingSaveButton().trigger("click");
+    await flushPromises();
+
+    expect(profileApi.save).not.toHaveBeenCalled();
+    expect(useToastStore().message).toContain("orderHandling.invalidAutoCancel");
+  });
+});

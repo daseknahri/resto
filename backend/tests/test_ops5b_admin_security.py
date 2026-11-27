@@ -864,7 +864,10 @@ class TestEnsurePlatformAdminSecrets(SimpleTestCase):
         cmd = self._cmd()
         User = MagicMock()
         mock_user = MagicMock()
-        User.objects.get_or_create.return_value = (mock_user, False)
+        # R6-15: the password is set only when the user row is CREATED, so the
+        # source-priority assertion runs on the create path (existing-user
+        # no-reset is covered by test_existing_admin_password_is_not_reset).
+        User.objects.get_or_create.return_value = (mock_user, True)
         User.Roles = MagicMock()
         User.Roles.PLATFORM_SUPERADMIN = "platform_superadmin"
 
@@ -886,7 +889,8 @@ class TestEnsurePlatformAdminSecrets(SimpleTestCase):
         cmd = self._cmd()
         User = MagicMock()
         mock_user = MagicMock()
-        User.objects.get_or_create.return_value = (mock_user, False)
+        # R6-15: create path — see test_cli_password_used_when_no_env_var.
+        User.objects.get_or_create.return_value = (mock_user, True)
         User.Roles = MagicMock()
         User.Roles.PLATFORM_SUPERADMIN = "platform_superadmin"
 

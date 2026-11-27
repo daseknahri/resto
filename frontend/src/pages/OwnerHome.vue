@@ -760,7 +760,8 @@ const fetchTodayReservations = async () => {
   // B-31: bucket "today" in the TENANT timezone (Contract E), not UTC — the
   // UTC date was off by one near midnight local time. _tenantDayStr is defined
   // below; this runs after setup, so the reference is live. Its no-timezone
-  // fallback is toDateString(), which is not a YYYY-MM-DD param — guard it.
+  // fallback is the UTC date (R6-26, YYYY-MM-DD) — the guard below stays as a
+  // safety net for any non-YYYY-MM-DD value.
   let today = _tenantDayStr(new Date());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) today = new Date().toISOString().slice(0, 10);
   reservationsError.value = false;
@@ -926,16 +927,26 @@ const toggleMenu = async () => {
   }
 };
 
+// R6-26: UTC day key — toISOString() is UTC by definition. The NaN guard
+// keeps the old toDateString() no-throw property for unparseable input.
+const _utcDayStr = (d) => {
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? "" : dt.toISOString().slice(0, 10);
+};
+
 // Bucket "today"/"yesterday" by the TENANT's timezone (not the owner's device),
 // so the dashboard headline numbers match the orders board — which already uses
 // tenant tz (Contract E). Same shape as OwnerOrders._tenantDateStr.
 const _tenantDayStr = (d) => {
   const tz = tenant.resolvedMeta?.profile?.timezone;
-  if (!tz) return new Date(d).toDateString();
+  // R6-26: a blank (or unparseable) tenant timezone buckets in UTC on the
+  // backend, so the frontend must look up the UTC date — not the owner's
+  // device-local date — or "today" disagrees near midnight.
+  if (!tz) return _utcDayStr(d);
   try {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
   } catch {
-    return new Date(d).toDateString();
+    return _utcDayStr(d);
   }
 };
 

@@ -417,6 +417,48 @@ class CustomerLoyaltyRedeemViewTests(SimpleTestCase):
 
 # ── CustomerLoyaltyHistoryView ────────────────────────────────────────────────
 
+    @patch("accounts.wallet_service.credit_wallet")
+    @patch("accounts.models.WalletTransaction.objects")
+    @patch("menu.views.LoyaltyConfig.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_concurrent_duplicate_reports_real_redeemed_points(self, mock_cust_objs, mock_cfg_objs, mock_tx_objs, mock_credit):
+        """R6-21: a concurrent duplicate landing in the IntegrityError path must
+        report the REAL redeemed points (parsed from the prior row's reference),
+        not the old hardcoded 0 — one credit, both responses agree."""
+        from django.db import IntegrityError
+        customer = Customer(id=1, phone_verified=True, loyalty_points=200,
+                            wallet_balance=Decimal("10.00"))
+        locked = MagicMock()
+        locked.pk = 1
+        locked.id = 1
+        locked.loyalty_points = 200
+        locked.wallet_balance = Decimal("10.00")
+        locked.phone_verified = True
+        mock_cust_objs.select_for_update.return_value.get.return_value = locked
+        cfg = _make_loyalty_config(enabled=True, redeem_threshold=100, points_value="0.0100")
+        mock_cfg_objs.filter.return_value.first.return_value = cfg
+        prior = MagicMock()
+        prior.reference = "loyalty:100pts"
+        prior.amount = Decimal("1.00")
+        # Call order of WalletTransaction.objects.filter(...).first():
+        #  pre-flight -> None, in-block re-check -> None, IntegrityError refetch -> prior.
+        mock_tx_objs.filter.return_value.first.side_effect = [None, None, prior]
+        mock_credit.side_effect = IntegrityError("duplicate key value violates unique constraint")
+
+        req = self._post({"points": 100}, principal=customer)
+        with patch("django.db.transaction.atomic"), \
+             patch("django.db.connection") as mock_dbc, \
+             patch.object(Customer, "refresh_from_db", return_value=None):
+            mock_dbc.tenant = SimpleNamespace(id=1)
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get("duplicate"))
+        self.assertEqual(resp.data["redeemed_points"], 100)
+        self.assertEqual(resp.data["credit_amount"], "1.00")
+        mock_credit.assert_called_once()
+
+
 class CustomerLoyaltyHistoryViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()

@@ -7,7 +7,10 @@ from django.core.management.base import BaseCommand, CommandError
 
 class Command(BaseCommand):
     help = (
-        "Create or update the primary platform superadmin account. "
+        "Create the primary platform superadmin account if missing. "
+        "Create-only for the password (R6-15): an existing account keeps its "
+        "current password — the env var / --password is the INITIAL password "
+        "only, so a password rotated in Django admin survives redeploys. "
         "Password is read from the PLATFORM_ADMIN_PASSWORD environment variable "
         "or prompted interactively when not supplied. "
         "Passing --password on the CLI is supported but deprecated "
@@ -53,10 +56,14 @@ class Command(BaseCommand):
         user.role = User.Roles.PLATFORM_SUPERADMIN
         user.is_staff = True
         user.is_superuser = True
-        user.set_password(password)
-        user.save()
-
         if created:
+            user.set_password(password)
+            user.save()
             self.stdout.write(self.style.SUCCESS(f"Platform admin created: {email}"))
         else:
-            self.stdout.write(self.style.SUCCESS(f"Platform admin updated: {email}"))
+            # R6-15: create-only — never reset an existing account's password.
+            # Role/staff flags are still ensured (that is the command's job).
+            user.save()
+            self.stdout.write(
+                f"Platform admin already exists: {email}; skipping password set"
+            )

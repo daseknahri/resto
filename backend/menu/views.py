@@ -1272,9 +1272,12 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     def _table_short_url(self, table, base_url):
         return f"{base_url}/t/{table.slug}"
 
-    def _table_full_url(self, table, base_url):
-        return f"{base_url}/menu?table={quote_plus(table.label)}"
-
+    # R6-30: _table_full_url is gone — it built {base}/menu?table=<label>, a
+    # URL no page ever honoured (nothing reads a ?table= query param, and the
+    # label is unvalidated human text, not the slug the backend resolves), so
+    # a customer ordering from it placed a non-table order the waiter never
+    # saw as a dine-in tab. One URL per table now: the short /t/<slug> link,
+    # which carries the table context. The QR PNGs already encode it.
     def _qr_png_bytes(self, value):
         qr = qrcode.QRCode(
             version=None,
@@ -1389,14 +1392,13 @@ class TableLinkViewSet(viewsets.ModelViewSet):
 
         csv_buffer = StringIO()
         csv_writer = csv.writer(csv_buffer)
-        csv_writer.writerow(["label", "slug", "short_url", "full_menu_url", "is_active"])
+        csv_writer.writerow(["label", "slug", "short_url", "is_active"])
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
             for table in rows:
                 short_url = self._table_short_url(table, base_url)
-                full_url = self._table_full_url(table, base_url)
-                csv_writer.writerow([_csv_safe(table.label), table.slug, short_url, full_url, "true" if table.is_active else "false"])
+                csv_writer.writerow([_csv_safe(table.label), table.slug, short_url, "true" if table.is_active else "false"])
                 qr_name = f"qr/{self._safe_filename_token(table.slug, fallback='table')}.png"
                 archive.writestr(qr_name, self._qr_png_bytes(short_url))
 
@@ -3671,12 +3673,21 @@ class PlaceOrderView(APIView):
                 # Multi-branch (Phase 3): stamp the order's branch — the
                 # payload's branch slug (picker selection) wins, then the
                 # dine-in table's section's branch, then the tenant default.
-                # Resolution failure must never block checkout: unstamped.
+                # Resolution failure must never block checkout: unstamped —
+                # except an explicit slug naming no active branch (R6-17),
+                # which is a 400: the order must not land at a location the
+                # customer did not choose.
                 try:
                     from .order_service import resolve_order_branch as _resolve_branch
+                    from .order_service import BranchUnavailableError as _BranchUnavailable
                     _order_branch = _resolve_branch(
                         table_slug=table_slug,
                         branch_slug=(request.data.get("branch") or ""),
+                    )
+                except _BranchUnavailable:
+                    return Response(
+                        {"detail": "The selected branch is unavailable.", "code": "branch_unavailable"},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
                 except Exception:
                     _order_branch = None
@@ -5947,11 +5958,18 @@ class StaffVoidOrderItemView(APIView):
                     getattr(order, "order_number", getattr(order, "pk", "?")),
                 )
 
-            # Partial wallet refund — two cases:
+            # Partial wallet refund — two cases (R6-02: the overpay is computed
+            # from the RECONCILED collected figure — ledger cash + wallet counted
+            # once — not from wallet_amount_paid alone. Ledger cash was invisible
+            # to the old math but counted by _order_collected in the PAID flip, so
+            # a partly-cash tab could flip PAID while keeping a cash overpay):
             #   A. PAID order: refund min(line_total, wallet_amount_paid); status stays PAID.
-            #   B. UNPAID order with wallet_amount_paid > new total (split-bill overpayment):
-            #      refund the overpay and flip the order to PAID so the payment flow
-            #      doesn't get stuck (ledger now fully covers the reduced total).
+            #   B. UNPAID order: refund the WALLET share of the reconciled overpay
+            #      (min(overpay, wallet_paid)) and flip to PAID ONLY when the money
+            #      left after the refund covers the new total EXACTLY — any remaining
+            #      cash overpay is surfaced as overpay_cash instead of silently kept.
+            #      The cash half of the refund itself is D2 (no cash-refund mechanism
+            #      yet): staff must resolve it through the correction/refund path.
             # We save the order BEFORE calling credit_wallet so that the
             # wallet_amount_paid decrement and the wallet credit are atomic with
             # respect to failures: if order.save() raises, credit_wallet is never
@@ -5959,8 +5977,20 @@ class StaffVoidOrderItemView(APIView):
             # order.save() via savepoint (fixing the non-atomicity risk).
             _refunded = Decimal("0")
             _extra_save_fields: list = []
+            _overpay_cash = Decimal("0")
             wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
             new_total = Decimal(str(order.total or "0"))
+            # Reconciled collected, from the order's ledger rows (the same rows the
+            # staff payload reads) plus non-ledger wallet money — each wallet
+            # payment counted once (see _order_collected).
+            _ledger_rows = list(order.payments.all()) if hasattr(order, "payments") else []
+            _ledger_paid = sum((Decimal(str(p.amount or "0")) for p in _ledger_rows), Decimal("0"))
+            _ledger_wallet = sum(
+                (Decimal(str(p.amount or "0")) for p in _ledger_rows if p.method == OrderPayment.Method.WALLET),
+                Decimal("0"),
+            )
+            _collected_before = _ledger_paid + max(Decimal("0"), wallet_paid - _ledger_wallet)
+            _overpay_total = max(Decimal("0"), _collected_before - new_total)
             if order.payment_status == Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
                 # Case A — PAID order void
                 line_total = Decimal(str(item.subtotal))
@@ -5968,33 +5998,24 @@ class StaffVoidOrderItemView(APIView):
                 if refund_amount > Decimal("0"):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
+                _overpay_cash = max(Decimal("0"), _collected_before - _refunded - new_total)
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
-                # Case B — UNPAID order: check if the money already collected now covers
-                # the reduced total and / or if wallet overpays the new total.
-                #
-                # BUGFIX (silent write-off): the old predicate was
-                #   sum(order.payments) + wallet_amount_paid >= new_total.
-                # A split-bill wallet payment lands in BOTH signals — StaffOrderPaymentView
-                # / OwnerWalletChargeView write a WALLET OrderPayment row AND bump
-                # wallet_amount_paid — so that wallet money was counted twice. An order
-                # 60-wallet-paid of 100, after voiding a 10 item (new_total 90), computed
-                # 60+60=120 >= 90 and flipped to PAID, collecting only 60 for a 90 order and
-                # writing off 30 (bypassing the S1 reconciliation guard). Use the reconciling
-                # _order_collected() helper, which counts each wallet payment ONCE. Capture it
-                # BEFORE the overpay refund decrements wallet_amount_paid, then subtract what
-                # we refund (the WALLET ledger row is NOT decremented by the refund, so the
-                # helper would otherwise still count it).
-                collected = _order_collected(order)
-                # Overpayment = how much wallet_amount_paid exceeds the new total after void
-                overpay = max(Decimal("0"), wallet_paid - new_total)
-                if overpay > Decimal("0"):
-                    _refunded = overpay
+                # Case B — UNPAID order: refund the wallet share of the reconciled
+                # overpay; the cash share stays visible as overpay_cash.
+                if _overpay_total > Decimal("0"):
+                    _refunded = min(_overpay_total, wallet_paid)
                     order.wallet_amount_paid = wallet_paid - _refunded
+                _overpay_cash = _overpay_total - _refunded
                 # Flip to PAID only if the money actually collected (each wallet payment
-                # counted once), minus what we just refunded, now covers the new total.
-                if collected - _refunded >= new_total:
+                # counted once), minus what we just refunded, now covers the new total
+                # EXACTLY — a remaining cash overpay blocks the flip.
+                if _collected_before - _refunded >= new_total and _overpay_cash == Decimal("0"):
                     order.mark_paid(save=False)
                     _extra_save_fields = ["payment_status", "paid_at"]
+            else:
+                # No wallet money to refund (incl. the pure-cash variant): any cash
+                # over-collected by the void is still surfaced, never kept silently.
+                _overpay_cash = _overpay_total
 
             # Persist total update and (conditionally) wallet_amount_paid before
             # issuing any wallet credit so the DB is consistent if credit_wallet fails.
@@ -6037,7 +6058,12 @@ class StaffVoidOrderItemView(APIView):
         except Exception:
             pass
 
-        return Response(_staff_order_payload(order))
+        _payload = _staff_order_payload(order)
+        if _overpay_cash > Decimal("0"):
+            # R6-02: cash over-collected by this void — surfaced so staff resolve
+            # it (D2 cash-refund mechanism still pending); never silently kept.
+            _payload["overpay_cash"] = str(_overpay_cash.quantize(Decimal("0.01")))
+        return Response(_payload)
 
 
 class StaffCompOrderItemView(APIView):
@@ -6209,11 +6235,22 @@ class StaffCompOrderItemView(APIView):
                     order, _new_food_subtotal
                 )
 
-            # Partial wallet refund — identical two-case handling to void.
+            # Partial wallet refund — identical two-case handling to void (R6-02:
+            # overpay from the RECONCILED collected figure; a remaining cash
+            # overpay is surfaced as overpay_cash and blocks the PAID flip).
             _refunded = Decimal("0")
             _extra_save_fields: list = []
+            _overpay_cash = Decimal("0")
             wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
             new_total = Decimal(str(order.total or "0"))
+            _ledger_rows = list(order.payments.all()) if hasattr(order, "payments") else []
+            _ledger_paid = sum((Decimal(str(p.amount or "0")) for p in _ledger_rows), Decimal("0"))
+            _ledger_wallet = sum(
+                (Decimal(str(p.amount or "0")) for p in _ledger_rows if p.method == OrderPayment.Method.WALLET),
+                Decimal("0"),
+            )
+            _collected_before = _ledger_paid + max(Decimal("0"), wallet_paid - _ledger_wallet)
+            _overpay_total = max(Decimal("0"), _collected_before - new_total)
             if order.payment_status == Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
                 # Case A — PAID order comp
                 line_total = Decimal(str(item.subtotal))
@@ -6221,21 +6258,21 @@ class StaffCompOrderItemView(APIView):
                 if refund_amount > Decimal("0"):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
+                _overpay_cash = max(Decimal("0"), _collected_before - _refunded - new_total)
             elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
-                # Case B — UNPAID order overpay reconciliation. Identical settle predicate
-                # to StaffVoidOrderItemView, and it carried the same silent-write-off bug:
-                # summing the OrderPayment ledger AND wallet_amount_paid double-counts a
-                # split-bill WALLET row (written to BOTH by StaffOrderPaymentView /
-                # OwnerWalletChargeView). Use _order_collected() (each wallet payment counted
-                # once), captured BEFORE the overpay refund, minus what we refund.
-                collected = _order_collected(order)
-                overpay = max(Decimal("0"), wallet_paid - new_total)
-                if overpay > Decimal("0"):
-                    _refunded = overpay
+                # Case B — UNPAID order overpay reconciliation: refund the wallet
+                # share of the reconciled overpay; the cash share stays visible.
+                if _overpay_total > Decimal("0"):
+                    _refunded = min(_overpay_total, wallet_paid)
                     order.wallet_amount_paid = wallet_paid - _refunded
-                if collected - _refunded >= new_total:
+                _overpay_cash = _overpay_total - _refunded
+                if _collected_before - _refunded >= new_total and _overpay_cash == Decimal("0"):
                     order.mark_paid(save=False)
                     _extra_save_fields = ["payment_status", "paid_at"]
+            else:
+                # No wallet money to refund (incl. the pure-cash variant): any cash
+                # over-collected by the comp is still surfaced, never kept silently.
+                _overpay_cash = _overpay_total
 
             _wallet_fields = ["wallet_amount_paid"] if _refunded > Decimal("0") else []
             _commission_fields = ["commission_amount"] if _recompute_commission else []
@@ -6268,7 +6305,12 @@ class StaffCompOrderItemView(APIView):
         except Exception:
             pass
 
-        return Response(_staff_order_payload(order))
+        _payload = _staff_order_payload(order)
+        if _overpay_cash > Decimal("0"):
+            # R6-02: cash over-collected by this comp — surfaced so staff resolve
+            # it (D2 cash-refund mechanism still pending); never silently kept.
+            _payload["overpay_cash"] = str(_overpay_cash.quantize(Decimal("0.01")))
+        return Response(_payload)
 
 
 class StaffFireCourseView(APIView):
@@ -6588,6 +6630,7 @@ class StaffTransferItemsView(APIView):
       already_paid     — source order is already marked PAID
       no_items         — item_ids is empty
       items_not_found  — one or more item_ids don't exist in src order (non-voided)
+      cross_branch     — source and destination orders belong to different branches
 
     Guards (400):
       dest_already_paid — destination order is already marked PAID (moving items
@@ -6685,6 +6728,16 @@ class StaffTransferItemsView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            # R6-18: items must not move between physical locations — the
+            # destination branch's kitchen would gain items the source branch
+            # may already be cooking. Both orders unstamped (None) is fine.
+            if (
+                src.branch_id is not None
+                and dest.branch_id is not None
+                and src.branch_id != dest.branch_id
+            ):
+                return Response({"detail": "Source and destination orders belong to different branches.", "code": "cross_branch"}, status=status.HTTP_409_CONFLICT)
 
             # Validate items belong to src and are non-voided
             src_item_ids = {i.id for i in src.items.all() if not i.is_voided}
@@ -6814,6 +6867,15 @@ class StaffMergeOrdersView(APIView):
                      "code": "source_has_payment"},
                     status=status.HTTP_409_CONFLICT,
                 )
+
+            # R6-18: same as transfer — a merge across branches moves food
+            # between kitchens. Both orders unstamped (None) is fine.
+            if (
+                src.branch_id is not None
+                and dest.branch_id is not None
+                and src.branch_id != dest.branch_id
+            ):
+                return Response({"detail": "Source and destination orders belong to different branches.", "code": "cross_branch"}, status=status.HTTP_409_CONFLICT)
 
             # Move all non-voided items from src → dest
             active_src_item_ids = [i.id for i in src.items.all() if not i.is_voided]
@@ -7497,6 +7559,13 @@ class OwnerDeliveryJobActionView(APIView):
 
         # ── Refund & cancel ────────────────────────────────────────────────────
         if action == "refund_cancel":
+            # R6-04: a COMPLETED order was fulfilled — it can't be refunded + cancelled.
+            if order.status == Order.Status.COMPLETED:
+                return Response(
+                    {"detail": "This order was already completed; it can't be refunded and cancelled.",
+                     "code": "order_completed"},
+                    status=status.HTTP_409_CONFLICT,
+                )
             # Shared idempotent implementation (also used by the stuck-job auto-refund
             # sweep): cancel + wallet-refund + reverse loyalty + restock + stand the
             # driver down (Resolution.REFUNDED_CANCELLED) + realtime broadcast. Runs in
@@ -7514,6 +7583,22 @@ class OwnerDeliveryJobActionView(APIView):
             )
             if job is None:
                 return Response({"detail": "No delivery job for this order.", "code": "no_job"}, status=status.HTTP_404_NOT_FOUND)
+
+            # R6-05: the order is already resolved (owner delivered it themselves and
+            # marked it COMPLETED, or it was CANCELLED) — re-dispatching would put a
+            # second driver on a phantom delivery and pay them for it, and paying a
+            # no-show on a resolved order is equally wrong. Refund/cancel is the
+            # only safe path left (and it is itself a no-op on a completed order).
+            if action in ("redispatch", "confirm_noshow") and order.status in (
+                Order.Status.COMPLETED,
+                Order.Status.CANCELLED,
+            ):
+                _code = "order_completed" if order.status == Order.Status.COMPLETED else "order_cancelled"
+                return Response(
+                    {"detail": "This order is already resolved; the delivery job can't be re-dispatched or paid out.",
+                     "code": _code},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             if action == "redispatch":
                 if job.status != _DJob.Status.FAILED:
@@ -7968,6 +8053,7 @@ class OwnerOrderListView(APIView):
                     my_rating_map[cr["order_number"]] = {"score": cr["score"], "note": cr["note"]}
 
         # ── Batch-load delivery job data (public schema — shared model) ─────────
+        from accounts.delivery_service import is_job_driver_silent as _is_job_driver_silent
         from accounts.models import DeliveryJob as _DJ
         delivery_job_map: dict = {}  # order_number → serialised job dict
         if tenant_id:
@@ -8008,6 +8094,10 @@ class OwnerOrderListView(APIView):
                         "resolution": _dj.resolution,
                         "restaurant_driver_rating": _dj.restaurant_driver_rating,
                         "restaurant_driver_note": _dj.restaurant_driver_note,
+                        # R6-11: picked up + driver silent (no position fix for 15
+                        # min or pickup over 60 min old) — the owner orders list
+                        # shows this as a distinct state, not just "picked up".
+                        "driver_silent": _is_job_driver_silent(_dj, timezone.now()),
                     }
 
         # VAT settings (read once) — prices are VAT-inclusive; we only break out
@@ -8778,7 +8868,10 @@ def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
 
     MUST run inside the order's tenant schema_context: the wallet-refund idempotency key
     and the restock/loyalty queries are tenant-scoped. Returns True if THIS call performed
-    the cancellation, False if the order was already cancelled (a replay).
+    the cancellation, False if the order was already cancelled (a replay) — or already
+    COMPLETED (R6-04: a completed order was fulfilled; cancelling + refunding it would
+    give the customer the food AND the money back. A completed-order refund, if ever
+    wanted, is a separate owner flow).
 
     Caller contract: NEVER call this for a job whose food was already picked up — that is
     an owner decision, not an automatic refund.
@@ -8796,6 +8889,12 @@ def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
         # and skips them. (The wallet credit is separately idempotent via its namespaced key,
         # so it safely replays either way.) Falls back to the passed copy if the row vanished.
         locked = Order.objects.select_for_update().filter(pk=order.pk).first()
+        # R6-04: a COMPLETED order was fulfilled — return False without mutating
+        # anything (no cancel, no wallet refund, no loyalty reversal, no restock).
+        # The stuck-job sweep re-verifies this too, but the shared helper is the
+        # last line of defence for every caller.
+        if (locked or order).status == Order.Status.COMPLETED:
+            return False
         if (locked or order).status != Order.Status.CANCELLED:
             order.status = Order.Status.CANCELLED
             order.status_updated_at = _tz.now()
@@ -9400,6 +9499,14 @@ class OwnerOrderMarkPaidView(APIView):
                 # Fast-path cache hit: return current state without touching the DB.
                 _cached_order = Order.objects.filter(id=order_id).first()
                 if _cached_order is not None:
+                    # R6-08: a cancelled order must never replay as paid — a stale
+                    # tap on a cancelled-and-refunded order used to return
+                    # already_paid and, on the slow path, write a phantom CASH row.
+                    if _cached_order.status == Order.Status.CANCELLED:
+                        return Response(
+                            {"detail": "This order was cancelled.", "code": "order_cancelled"},
+                            status=status.HTTP_409_CONFLICT,
+                        )
                     return Response({
                         "id": _cached_order.id,
                         "order_number": _cached_order.order_number,
@@ -9415,6 +9522,16 @@ class OwnerOrderMarkPaidView(APIView):
             order = Order.objects.select_for_update().filter(id=order_id).first()
             if order is None:
                 return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # R6-08: a cancelled order must never flip to PAID — a stale tap on a
+            # cancelled-and-refunded order used to write a phantom CASH row (POS-UX-2)
+            # and flip the bill to PAID. Same code as CustomerOrderPayWalletView.
+            # Placed before the already-PAID fast path and the POS-UX-2 row creation.
+            if order.status == Order.Status.CANCELLED:
+                return Response(
+                    {"detail": "This order was cancelled.", "code": "order_cancelled"},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             was_paid = order.is_paid
 
@@ -9829,6 +9946,30 @@ class OwnerZReportView(APIView):
         refund_count = int(refund_agg["refund_count"] or 0)
         refund_total = Decimal(str(refund_agg["refund_total"] or 0)).quantize(Decimal("0.01"))
 
+        # R6-14: `net` only subtracts refunds of orders that were counted in
+        # `collected`. A cancelled prepaid order never reaches COMPLETED, so it
+        # never enters collected_qs — but its wallet refund lands in refund_total
+        # the same day, which used to understate net by the full refund. REFUND
+        # rows carry reference=order_number on every creation path (cancel refund,
+        # void/comp refund, correction), so join on it: refunds whose order is in
+        # the collected set reduce net; refunds for orders never collected are
+        # shown on their own line instead of being folded into net.
+        _collected_numbers = set(collected_qs.values_list("order_number", flat=True))
+        _refund_rows = list(
+            _WTx.objects.filter(**refund_filter).values("reference", "amount")
+        )
+        uncollected_refund_total = sum(
+            (
+                Decimal(str(_r["amount"] or 0))
+                for _r in _refund_rows
+                if (_r["reference"] or "") not in _collected_numbers
+            ),
+            Decimal("0"),
+        ).quantize(Decimal("0.01"))
+        collected_refund_total = (refund_total - uncollected_refund_total).quantize(
+            Decimal("0.01")
+        )
+
         # ── Voids in window ───────────────────────────────────────────────────
         # OrderItem.is_voided=True AND voided_at in [start, end).
         # voided_by: the model stores void attribution in OrderItem.void_reason only
@@ -9875,9 +10016,12 @@ class OwnerZReportView(APIView):
             })
 
         # ── By-staff breakdown ────────────────────────────────────────────────
-        # Source: OrderPayment.recorded_by_name for ledger-based payments.
-        # Legacy (one-shot settle) orders have no ledger row; they cannot be
-        # attributed to a specific staff member from existing data.
+        # Source: OrderPayment.recorded_by_name for ledger-based payments, PLUS
+        # each collected order's non-ledger wallet money (R6-09 — see the merge
+        # below). Legacy (one-shot settle) orders have no ledger row; their wallet
+        # money is attributed to the staff member who handled the order
+        # (order.handled_by_user_id), or to an explicit "(unattributed wallet)"
+        # row when no handler is recorded — so the table sums to the header.
         #
         # IMPORTANT: filter on order__paid_at (not OrderPayment.created_at) so that
         # by_staff totals are drawn from the same service-day population as the
@@ -9917,6 +10061,78 @@ class OwnerZReportView(APIView):
             ],
             key=lambda x: x["name"],
         )
+
+        # ── R6-09: fold non-ledger wallet money into by-staff ──────────────
+        # The header's collected.wallet counts ledger rows PLUS legacy wallet
+        # PLUS the per-order mixed extra (split_revenue_for_orders), but the
+        # table above reads ONLY OrderPayment rows — so wallet money paid without
+        # a ledger row (pay-wallet one-shot settles, place-order wallet debits)
+        # was counted in the header and invisible to by-staff. Attribute each
+        # collected order's max(0, wallet_amount_paid − ledger_wallet) to the
+        # staff member who handled the order; orders with no handler go on an
+        # explicit "(unattributed wallet)" row so the table sums to the header.
+        # The "orders" count on a merged row is left as the ledger-order count
+        # (a wallet-only order handled by that staffer does not increment it);
+        # a brand-new row counts its contributing orders.
+        _nlw_by_name = {}
+        try:
+            _collected_rows = list(collected_qs.values(
+                "id", "handled_by_user_id", "wallet_amount_paid"
+            ))
+        except Exception:
+            _collected_rows = []
+        if _collected_rows:
+            _lw_by_order = {
+                _r["order_id"]: Decimal(str(_r["_s"] or 0))
+                for _r in OrderPayment.objects.filter(
+                    order_id__in=[_r["id"] for _r in _collected_rows],
+                    method=OrderPayment.Method.WALLET,
+                ).values("order_id").annotate(_s=_Sum("amount"))
+            }
+            _handler_ids = sorted({
+                _r["handled_by_user_id"] for _r in _collected_rows
+                if _r["handled_by_user_id"]
+            })
+            _handler_names = {}
+            if _handler_ids:
+                from accounts.models import User as _User
+                for _u in _User.objects.filter(id__in=_handler_ids).values(
+                    "id", "first_name", "last_name", "username", "email"
+                ):
+                    _name = (
+                        f"{_u.get('first_name') or ''} {_u.get('last_name') or ''}".strip()
+                        or _u.get("username") or _u.get("email") or "(unknown)"
+                    )
+                    _handler_names[_u["id"]] = _name[:80]
+            for _r in _collected_rows:
+                _nlw = max(
+                    Decimal("0"),
+                    Decimal(str(_r["wallet_amount_paid"] or 0))
+                    - _lw_by_order.get(_r["id"], Decimal("0")),
+                ).quantize(Decimal("0.01"))
+                if _nlw <= Decimal("0"):
+                    continue
+                _hname = _handler_names.get(
+                    _r["handled_by_user_id"], "(unattributed wallet)"
+                )
+                _entry = _nlw_by_name.setdefault(_hname, [Decimal("0"), 0])
+                _entry[0] += _nlw
+                _entry[1] += 1
+            _by_staff_by_name = {row["name"]: row for row in by_staff}
+            for _hname, (_amount, _count) in _nlw_by_name.items():
+                if _hname in _by_staff_by_name:
+                    _row = _by_staff_by_name[_hname]
+                    _row["collected_wallet"] = str(
+                        (Decimal(_row["collected_wallet"]) + _amount).quantize(Decimal("0.01"))
+                    )
+                else:
+                    by_staff.append({
+                        "name": _hname,
+                        "orders": _count,
+                        "collected_cash": "0.00",
+                        "collected_wallet": str(_amount.quantize(Decimal("0.01"))),
+                    })
+            by_staff = sorted(by_staff, key=lambda x: x["name"])
 
         # ── Net cash position ─────────────────────────────────────────────────
         # net_cash_position = collected.cash − cash_refunds_issued
@@ -10019,9 +10235,15 @@ class OwnerZReportView(APIView):
             "refunds": {
                 "count": refund_count,
                 "total": str(refund_total),
+                # R6-14: refunds for orders never counted in collected (e.g. a
+                # cancelled prepaid order refunded the same day) do NOT reduce
+                # net — they are shown on this line instead.
+                "uncollected_total": str(uncollected_refund_total),
                 "basis": (
                     "WalletTransaction REFUND rows created in window. "
-                    "Cash refunds not tracked (no cash-refund ledger exists)."
+                    "Cash refunds not tracked (no cash-refund ledger exists). "
+                    "Only refunds on collected orders reduce net; refunds for "
+                    "orders never collected are on uncollected_total."
                 ),
             },
             "voids": {
@@ -10054,7 +10276,8 @@ class OwnerZReportView(APIView):
                 "food_cost_pct": food_cost_pct,
             },
             "net_cash_position": str(net_cash_position),
-            "net": str((collected_total - refund_total).quantize(Decimal("0.01"))),
+            # R6-14: net = collected − refunds on collected orders only.
+            "net": str((collected_total - collected_refund_total).quantize(Decimal("0.01"))),
         }
 
     def get(self, request, *args, **kwargs):
@@ -10120,6 +10343,7 @@ class OwnerZReportView(APIView):
         writer.writerow(["collected", "total", data["collected"]["total"]])
         writer.writerow(["refunds", "count", data["refunds"]["count"]])
         writer.writerow(["refunds", "total", data["refunds"]["total"]])
+        writer.writerow(["refunds", "uncollected_total", data["refunds"]["uncollected_total"]])
         writer.writerow(["voids", "count", data["voids"]["count"]])
         writer.writerow(["voids", "total", data["voids"]["total"]])
         writer.writerow(["comps", "count", data["comps"]["count"]])
@@ -10373,6 +10597,12 @@ class DishBulkAvailabilityResetView(APIView):
                 is_published=True, stock_qty=0
             ).update(stock_qty=None)
 
+        # R6-27: the public menu caches availability for 60 s — bust so the
+        # reset shows immediately, like the single-dish paths do.
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
         return Response({
             "restored": restored_count,
             "stock_cleared": stock_cleared_count,
@@ -10429,6 +10659,11 @@ class DishBulkResetAvailabilityView(APIView):
             id__in=dish_ids, is_published=True, stock_qty=0
         ).update(stock_qty=None)
 
+        # R6-27: bust so the re-enabled dishes show immediately (see above).
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
         return Response({
             "restored": restored_count,
             "stock_cleared": stock_cleared_count,
@@ -10452,6 +10687,13 @@ class DishBulkMarkUnavailableView(APIView):
         marked_count = Dish.objects.filter(
             is_published=True, is_available=True
         ).update(is_available=False)
+
+        # R6-27: bust so the 86'd dishes disappear from the public menu at
+        # once — a stale menu would let a customer order a dish that checkout
+        # then rejects as unavailable.
+        tenant = getattr(request, "tenant", None)
+        if tenant is not None:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
 
         return Response({"marked": marked_count}, status=status.HTTP_200_OK)
 
@@ -10529,6 +10771,16 @@ class DishBulkPriceUpdateView(APIView):
         if category_id is not None:
             qs = qs.filter(category_id=category_id)
         dishes = list(qs[:500])  # safety cap — 500 dishes per call
+        # R6-27: the 500 cap was silent — the response reported updated=N with
+        # no hint that dishes were left behind. Count only when the cap may
+        # have bitten (a short page proves the queryset is exhausted, so the
+        # common case costs no extra query).
+        if len(dishes) < 500:
+            total_matching = len(dishes)
+            truncated = False
+        else:
+            total_matching = qs.count()
+            truncated = total_matching > 500
 
         if not dishes:
             return Response({"updated": 0, "dry_run": dry_run, "items": []})
@@ -10571,12 +10823,20 @@ class DishBulkPriceUpdateView(APIView):
                 dish.price = new_price
                 dish.updated_at = now
             Dish.objects.bulk_update(dishes, ["price", "updated_at"])
+            # R6-27: bust so the new prices show immediately (see above).
+            tenant = getattr(request, "tenant", None)
+            if tenant is not None:
+                _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
 
-        return Response({
+        response_data = {
             "updated": len(dishes) if not dry_run else 0,
             "dry_run": dry_run,
             "items": preview,
-        })
+        }
+        if truncated:
+            response_data["truncated"] = True
+            response_data["total_matching"] = total_matching
+        return Response(response_data)
 
 
 # ── Ratings ───────────────────────────────────────────────────────────────────
@@ -12692,8 +12952,17 @@ class CustomerLoyaltyRedeemView(APIView):
                 ).first()
                 if _idem else None
             )
+            # R6-21: parse redeemed_points from the prior row's reference exactly
+            # as the in-block replay path does — the old hardcoded 0 told the
+            # customer "0 points redeemed, 20.00 credited" for a real redemption.
+            _prior_pts = 0
+            if _prior is not None:
+                try:
+                    _prior_pts = int(str(_prior.reference or "").split(":")[1].replace("pts", ""))
+                except (IndexError, ValueError):
+                    _prior_pts = 0
             return Response({
-                "redeemed_points": 0,
+                "redeemed_points": _prior_pts,
                 "credit_amount": str(_prior.amount) if _prior else "0.00",
                 "new_points_balance": _customer.loyalty_points,
                 "new_wallet_balance": str(_customer.wallet_balance),
@@ -12889,6 +13158,91 @@ _CSV_EXAMPLE_ROWS = [
 ]
 
 
+def _import_menu_rows(reader, default_super_cat):
+    """Process CSV rows into categories + dishes.
+
+    Extracted from OwnerMenuImportView.post (R6-29) so the whole loop can
+    run inside one transaction.atomic() block. Per-row skips (bad prices,
+    duplicate dish names) are handled inside the loop and do NOT raise;
+    any other exception propagates to the caller, which rolls the import
+    back entirely and answers with the distinct `failed` response.
+
+    Returns (created_categories, created_dishes, skipped, errors).
+    """
+    from decimal import Decimal as _Dec, InvalidOperation
+
+    created_categories = 0
+    created_dishes = 0
+    skipped = 0
+    errors = []
+    category_cache = {}  # name.lower() → Category instance
+
+    for row_num, row in enumerate(reader, start=2):  # row 1 = header
+        cat_name = str(row.get("category_name") or "").strip()[:150]
+        dish_name = str(row.get("dish_name") or "").strip()[:200]
+        price_raw = str(row.get("price") or "").strip()
+
+        if not cat_name or not dish_name:
+            skipped += 1
+            continue
+
+        try:
+            price = _Dec(price_raw).quantize(_Dec("0.01"))
+            if price < _Dec("0"):
+                raise ValueError("negative price")
+        except (InvalidOperation, ValueError):
+            errors.append(f"Row {row_num}: invalid price '{price_raw}' for '{dish_name}' — skipped.")
+            skipped += 1
+            continue
+
+        # Get or create category
+        cat_key = cat_name.lower()
+        if cat_key not in category_cache:
+            existing = Category.objects.filter(name__iexact=cat_name).first()
+            if existing:
+                category_cache[cat_key] = existing
+            else:
+                cat_slug = _make_unique_slug(cat_name, Category)
+                new_cat = Category.objects.create(
+                    super_category=default_super_cat,
+                    name=cat_name,
+                    slug=cat_slug,
+                    position=Category.objects.count(),
+                )
+                category_cache[cat_key] = new_cat
+                created_categories += 1
+
+        category = category_cache[cat_key]
+
+        # Skip duplicate dish names in the same category
+        if Dish.objects.filter(category=category, name__iexact=dish_name).exists():
+            skipped += 1
+            errors.append(f"Row {row_num}: '{dish_name}' already exists in '{cat_name}' — skipped.")
+            continue
+
+        description = str(row.get("description") or "").strip()
+        # tags: comma-separated, e.g. "vegetarian,spicy"
+        raw_tags = str(row.get("tags") or "").strip()
+        tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
+        # allergens: same format
+        raw_allergens = str(row.get("allergens") or "").strip()
+        allergens = [a.strip().lower() for a in raw_allergens.split(",") if a.strip()]
+
+        dish_slug = _make_unique_slug(dish_name, Dish)
+        Dish.objects.create(
+            category=category,
+            name=dish_name,
+            slug=dish_slug,
+            description=description,
+            price=price,
+            tags=tags,
+            allergens=allergens,
+            position=Dish.objects.filter(category=category).count(),
+        )
+        created_dishes += 1
+    return created_categories, created_dishes, skipped, errors
+
+
 class OwnerMenuImportView(APIView):
     """POST /api/owner/menu/import/   — import dishes from a CSV upload.
        GET  /api/owner/menu/import/   — download a CSV template."""
@@ -12941,81 +13295,27 @@ class OwnerMenuImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        created_categories = 0
-        created_dishes = 0
-        skipped = 0
-        errors = []
-        category_cache = {}  # name.lower() → Category instance
-
         # Fetch the default super-category (position=0 / first) or create one for imports
         try:
             default_super_cat = get_or_create_default_super_category()
         except Exception as _e:
             return Response({"detail": f"Could not access menu structure: {_e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        for row_num, row in enumerate(reader, start=2):  # row 1 = header
-            cat_name = str(row.get("category_name") or "").strip()[:150]
-            dish_name = str(row.get("dish_name") or "").strip()[:200]
-            price_raw = str(row.get("price") or "").strip()
-
-            if not cat_name or not dish_name:
-                skipped += 1
-                continue
-
-            try:
-                price = _Dec(price_raw).quantize(_Dec("0.01"))
-                if price < _Dec("0"):
-                    raise ValueError("negative price")
-            except (InvalidOperation, ValueError):
-                errors.append(f"Row {row_num}: invalid price '{price_raw}' for '{dish_name}' — skipped.")
-                skipped += 1
-                continue
-
-            # Get or create category
-            cat_key = cat_name.lower()
-            if cat_key not in category_cache:
-                existing = Category.objects.filter(name__iexact=cat_name).first()
-                if existing:
-                    category_cache[cat_key] = existing
-                else:
-                    cat_slug = _make_unique_slug(cat_name, Category)
-                    new_cat = Category.objects.create(
-                        super_category=default_super_cat,
-                        name=cat_name,
-                        slug=cat_slug,
-                        position=Category.objects.count(),
-                    )
-                    category_cache[cat_key] = new_cat
-                    created_categories += 1
-
-            category = category_cache[cat_key]
-
-            # Skip duplicate dish names in the same category
-            if Dish.objects.filter(category=category, name__iexact=dish_name).exists():
-                skipped += 1
-                errors.append(f"Row {row_num}: '{dish_name}' already exists in '{cat_name}' — skipped.")
-                continue
-
-            description = str(row.get("description") or "").strip()
-            # tags: comma-separated, e.g. "vegetarian,spicy"
-            raw_tags = str(row.get("tags") or "").strip()
-            tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
-            # allergens: same format
-            raw_allergens = str(row.get("allergens") or "").strip()
-            allergens = [a.strip().lower() for a in raw_allergens.split(",") if a.strip()]
-
-            dish_slug = _make_unique_slug(dish_name, Dish)
-            Dish.objects.create(
-                category=category,
-                name=dish_name,
-                slug=dish_slug,
-                description=description,
-                price=price,
-                tags=tags,
-                allergens=allergens,
-                position=Dish.objects.filter(category=category).count(),
+        # R6-29: the whole row loop runs in one transaction (see
+        # _import_menu_rows) — any unexpected exception rolls the import
+        # back entirely, so a failure halfway through never leaves a
+        # half-imported menu. Per-row skips (bad prices, duplicates) are
+        # handled inside the loop and do NOT raise.
+        try:
+            with transaction.atomic():
+                created_categories, created_dishes, skipped, errors = _import_menu_rows(
+                    reader, default_super_cat
+                )
+        except Exception as exc:
+            return Response(
+                {"detail": f"Import failed — nothing was saved: {exc}", "code": "failed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-            created_dishes += 1
 
         # B2 fix: this view creates categories/dishes directly (Category.objects.create /
         # Dish.objects.create) with no ViewSet involved, so PublishAccessMixin's
@@ -13449,6 +13749,62 @@ class CustomerOrderPayWalletView(APIView):
         })
 
 
+def _validate_wallet_charge_order(order_number, amount):
+    """R6-03: resolve the order behind a wallet charge BEFORE any debit.
+
+    Returns a 4xx Response when the charge must not proceed, else None.
+    Guards (same shape as StaffOrderPaymentView's overpay guard):
+      * unknown order_number → 404 (a typo must not debit a wallet)
+      * CANCELLED / COMPLETED order → 409 (no money moves on a dead order)
+      * already-PAID order → 409 (no top-up on a settled bill)
+      * amount above the outstanding (total − _order_collected) → 409 overpay
+    A charge with no order_number is not validated (no bill to settle).
+    The outstanding read is fail-open on an unexpected read error: the
+    bill-sync guard (_sync_charged_request_bills) re-checks before applying,
+    so a transient read failure degrades to the old sync-time check instead
+    of blocking a legitimate charge — and a missing order / terminal status
+    still refuses outright.
+    """
+    order = Order.objects.filter(order_number=order_number).only(
+        "id", "total", "wallet_amount_paid", "payment_status", "status"
+    ).first()
+    if order is None:
+        return Response(
+            {"detail": "Order not found.", "code": "order_not_found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if order.status == Order.Status.CANCELLED:
+        return Response(
+            {"detail": "This order was cancelled.", "code": "order_cancelled"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    if order.status == Order.Status.COMPLETED:
+        return Response(
+            {"detail": "This order is already completed.", "code": "order_completed"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    if order.payment_status == Order.PaymentStatus.PAID:
+        return Response(
+            {"detail": "This order is already paid.", "code": "already_paid"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    try:
+        _outstanding = Decimal(str(order.total or "0")) - _order_collected(order)
+    except Exception:
+        return None
+    if amount > _outstanding:
+        return Response(
+            {
+                "detail": f"Amount exceeds the outstanding balance {_outstanding}.",
+                "code": "overpay",
+                "outstanding": str(_outstanding),
+                "total": str(order.total),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    return None
+
+
 class OwnerWalletChargeView(APIView):
     """POST /api/owner/wallet/charge/ — charge a customer's wallet for an in-person order.
 
@@ -13510,6 +13866,16 @@ class OwnerWalletChargeView(APIView):
 
         order_number = str(request.data.get("order_number") or "").strip()[:100]
         note = str(request.data.get("note") or "").strip()[:200]
+
+        # R6-03: resolve the order BEFORE any money moves (both paths below).
+        # A typo'd order number, an already-settled order, or an amount above
+        # the outstanding used to debit the wallet first and only then look the
+        # order up — the debit landed, the bill never did. No order_number keeps
+        # today's behaviour (general charge, no bill to settle).
+        if order_number:
+            _charge_order_err = _validate_wallet_charge_order(order_number, amount)
+            if _charge_order_err is not None:
+                return _charge_order_err
         _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
         # Server-namespace the externally-supplied key with the TENANT schema so one
         # tenant's body-supplied key can never collide with another tenant's (or with
@@ -13745,8 +14111,46 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
         return applied
     pending = list(_WCR.objects.filter(
         tenant_id=tenant_id, status=_WCR.Status.CHARGED, bill_synced=False, order_number__in=nums
-    ).values_list("id", "order_number", "amount"))
-    for cr_id, onum, amount in pending:
+    ).values_list("id", "order_number", "amount", "wallet_tx_id"))
+    for cr_id, onum, amount, _wallet_tx_id in pending:
+        # R6-03: resolve the order BEFORE applying anything. The customer
+        # approved a waiter-typed amount; by sync time the order may have been
+        # cancelled, completed, or settled another way — applying the charge
+        # then would flip a dead order to PAID or stack money on a settled
+        # bill. A charge that fails validation is NOT applied: the request is
+        # marked synced (so it is not retried forever) and the mismatch is
+        # logged for manual reconciliation — the wallet debit already happened
+        # at approve time and must not be silently re-applied to the bill.
+        _sync_order = Order.objects.filter(order_number=onum).only(
+            "id", "total", "wallet_amount_paid", "payment_status", "status"
+        ).first()
+        _skip_reason = None
+        if _sync_order is None:
+            _skip_reason = "order_not_found"
+        elif _sync_order.status == Order.Status.CANCELLED:
+            _skip_reason = "order_cancelled"
+        elif _sync_order.status == Order.Status.COMPLETED:
+            _skip_reason = "order_completed"
+        elif _sync_order.payment_status == Order.PaymentStatus.PAID:
+            _skip_reason = "already_paid"
+        else:
+            try:
+                _sync_outstanding = Decimal(str(_sync_order.total or "0")) - _order_collected(_sync_order)
+            except Exception:
+                _sync_outstanding = None
+            if _sync_outstanding is not None and amount > _sync_outstanding:
+                _skip_reason = "overpay"
+        if _skip_reason is not None:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "Wallet charge request %s not applied to order %s: %s (amount %s)",
+                cr_id, onum, _skip_reason, amount,
+            )
+            try:
+                _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True)
+            except Exception:
+                pass
+            continue
         try:
             # W P1-4: claim + apply in ONE atomic block (see the docstring). A failure
             # rolls the claim back, so the request stays unsynced and is retried on
@@ -13758,26 +14162,25 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
                 Order.objects.filter(order_number=onum).update(
                     wallet_amount_paid=_F("wallet_amount_paid") + amount
                 )
-        except Exception:
-            continue  # claim or bill update failed — stays unsynced, retried next poll
-        # S1 fix: same OrderPayment tie-in as the instant-charge path above —
-        # this is the above-threshold (customer-approved) charge landing on the
-        # bill, so it needs the same reconciliation-guard visibility. Kept in
-        # its own try so a failure here (e.g. order looked up mid-delete)
-        # can never swallow the `applied` bookkeeping or the settle-check
-        # below — those must run whenever the wallet_amount_paid update above
-        # succeeded, exactly as before this ledger tie-in was added.
-        try:
-            _synced_order = Order.objects.filter(order_number=onum).only("id").first()
-            if _synced_order is not None:
+                # R6-20: the ledger tie-in row lives INSIDE the same atomic block
+                # (S1 fix, moved in from its old best-effort try/except: pass), so a
+                # crash can never leave the bill updated with no ledger row — and it
+                # is anchored on the approved wallet tx id (same key shape as the
+                # instant path's ownercharge:<tx.id>), so the DB unique constraint
+                # on OrderPayment.idempotency_key is the backstop against a
+                # duplicate row on any future retry path.
                 OrderPayment.objects.create(
-                    order=_synced_order,
+                    order=_sync_order,
                     amount=amount,
                     method=OrderPayment.Method.WALLET,
+                    idempotency_key=(
+                        f"ownercharge:{_wallet_tx_id}" if _wallet_tx_id is not None
+                        else f"ownercharge:req:{cr_id}"
+                    ),
                     note="Wallet charge (pay code, approved)",
                 )
         except Exception:
-            pass  # ledger row is best-effort; the wallet bill update above already landed
+            continue  # claim, bill update, or ledger row failed — stays unsynced, retried next poll
         _settle_order_if_wallet_covers(onum)
         applied[onum] = applied.get(onum, Decimal("0")) + amount
     return applied
@@ -14832,7 +15235,6 @@ class DrawerCloseView(APIView):
         note = (request.data.get("note") or "").strip()[:300]
         user = request.user
         user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
-        now = timezone.now()
 
         with transaction.atomic():
             session = DrawerSession.objects.select_for_update().filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
@@ -14842,11 +15244,23 @@ class DrawerCloseView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            # Cash collected = cash payments on completed orders paid since the drawer was opened.
-            # Reuses the same split_revenue_for_orders helper used by the Z-report so the
-            # cash figure is always consistent between the drawer close and the Z-report.
+            # R6-01: capture `now` AFTER the session lock, not before the block —
+            # a cash payment landing between the pre-block capture and the close
+            # commit used to be excluded from this close yet predate the next
+            # session, so it was never counted anywhere. (A payment landing in
+            # the remaining lock-to-commit instant is a known micro-gap; the
+            # window below is paid_at-based, so the next session bounds it.)
+            now = timezone.now()
+
+            # Cash collected = cash payments on PAID orders paid since the drawer was opened.
+            # R6-01: counted by paid_at alone — the old status=COMPLETED predicate
+            # excluded a tab paid in-session but completed after the close (cash in
+            # the till, never counted by any session). Payment and completion are
+            # separate events for a dine-in tab; cash is in the drawer once it is
+            # PAID. Reuses the same split_revenue_for_orders helper used by the
+            # Z-report so the cash figure is always consistent between the drawer
+            # close and the Z-report.
             collected_qs = Order.objects.filter(
-                status=Order.Status.COMPLETED,
                 payment_status=Order.PaymentStatus.PAID,
                 paid_at__gte=session.opened_at,
                 paid_at__lte=now,
@@ -14918,8 +15332,9 @@ class DrawerHistoryView(APIView):
                 # instead of blind. Same formula as DrawerCloseView: opening
                 # float + cash collected since open + pay-ins − pay-outs.
                 _now = timezone.now()
+                # R6-01: same paid_at-only rule as DrawerCloseView — a PAID order
+                # still in the kitchen counts toward the live expected total.
                 _collected_qs = Order.objects.filter(
-                    status=Order.Status.COMPLETED,
                     payment_status=Order.PaymentStatus.PAID,
                     paid_at__gte=sess.opened_at,
                     paid_at__lte=_now,

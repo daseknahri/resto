@@ -798,6 +798,7 @@
                 }"
               >{{ t(`ownerOrders.djStatus_${o.delivery_job.status}`) }}</span>
             </div>
+            <p v-if="o.delivery_job.driver_silent" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-200">{{ t('ownerOrders.djDriverSilent') }}</p>
             <div v-if="o.delivery_job.driver" class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2">
                 <span>{{ o.delivery_job.driver.name || t('ownerOrders.djDriverUnnamed') }}</span>
@@ -1739,14 +1740,22 @@ const fetchTodaySummary = async () => {
   } catch { /* keep the previous figures — todayStats falls back to the client calc */ }
 };
 
-// YYYY-MM-DD for a date in the tenant timezone (device tz when unset) — the same
-// day key the backend emits in revenue_summary.daily (Contract E).
+// R6-26: UTC day key — toISOString() is UTC by definition. The NaN guard
+// keeps the old toDateString() no-throw property for unparseable input.
+const _utcDayStr = (d) => {
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? "" : dt.toISOString().slice(0, 10);
+};
+
+// YYYY-MM-DD for a date in the tenant timezone (UTC when unset — R6-26) — the
+// same day key the backend emits in revenue_summary.daily (Contract E).
 const _tenantDayIso = (d) => {
   const tz = tenant.resolvedMeta?.profile?.timezone;
+  if (!tz) return _utcDayStr(d);
   try {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
   } catch {
-    return new Date(d).toISOString().slice(0, 10);
+    return _utcDayStr(d);
   }
 };
 
@@ -1757,11 +1766,12 @@ const _dailyEntry = (dateStr) => (revenueSummary.value?.daily || []).find((d) =>
 // not the owner's device timezone (Contract E: timezone "today" fix).
 const _tenantDateStr = (isoStr) => {
   const tz = tenant.resolvedMeta?.profile?.timezone;
-  if (!tz) return new Date(isoStr).toDateString(); // fallback to device tz
+  // R6-26: UTC fallback — the backend buckets a blank-timezone tenant in UTC.
+  if (!tz) return _utcDayStr(isoStr);
   try {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoStr));
   } catch {
-    return new Date(isoStr).toDateString();
+    return _utcDayStr(isoStr);
   }
 };
 
@@ -1769,7 +1779,7 @@ const todayStats = computed(() => {
   const tz = tenant.resolvedMeta?.profile?.timezone;
   const todayStr = tz
     ? new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
-    : new Date().toDateString();
+    : _utcDayStr(new Date());
   const todayOrders = order.orders.filter((o) => _tenantDateStr(o.created_at) === todayStr);
   const pending = todayOrders.filter((o) => o.status === "pending").length;
   const currency = order.orders[0]?.currency || revenueSummary.value?.currency || "MAD";
@@ -1795,10 +1805,10 @@ const STATUS_SORT = { scheduled: -1, pending: 0, confirmed: 1, preparing: 2, rea
 const filteredOrders = computed(() => {
   const tz = tenant.resolvedMeta?.profile?.timezone;
   const _fmt = (d) => {
-    if (!tz) return d.toDateString();
+    if (!tz) return _utcDayStr(d);
     try {
       return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-    } catch { return d.toDateString(); }
+    } catch { return _utcDayStr(d); }
   };
   const now = new Date();
   const todayStr = _fmt(now);

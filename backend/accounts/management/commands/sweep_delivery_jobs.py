@@ -33,10 +33,20 @@ Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last res
       (f2) Wave M M-12: the same hourly re-alert for long-UNCLAIMED SEARCHING jobs
       (no driver ever accepted) — rule (b) alerts once at 10 min, then the job went
       silent; past 60 min unclaimed it re-alerts hourly, same throttle.
+  (c3) R6-23: the same hourly re-alert for cap-exhausted pre-pickup jobs
+      (ASSIGNED/AT_RESTAURANT, redispatch_count >= 3) — rules (c)/(c2) escalate once
+      and then go silent forever; past 60 min since that first escalation the owner
+      is nudged again, hourly, same atomic-claim throttle.
   (g) Delivery orders (platform delivery on, not SCHEDULED/CANCELLED/COMPLETED) with no
       DeliveryJob past a short grace (5 min) → create the missing job + start dispatch.
       Covers orders whose job creation failed at checkout (those sites now log instead
       of swallowing the error).
+  (h) R6-11: WATCH-ONLY rule for PICKED_UP jobs — a driver who vanishes after pickup
+      (phone dies / app crashes / goes offline) is otherwise invisible: no rule scans
+      PICKED_UP at all. Past 15 min without a position fix, or a pickup older than
+      60 min, the owner is alerted hourly (same atomic-claim throttle as (f)/(f2)/
+      (c3)). NO auto-fail, NO auto-refund, NO status change — the food is with the
+      driver, so this stays an owner decision.
 Picked-up jobs are NEVER auto-touched or auto-refunded (the food is with the driver — that
 stays a `failed` case + owner decision).
 """
@@ -97,6 +107,63 @@ def _pickup_sla() -> timedelta:
                       or PICKUP_SLA_DEFAULT_MINUTES)
     except (TypeError, ValueError):
         minutes = PICKUP_SLA_DEFAULT_MINUTES
+    return timedelta(minutes=max(1, minutes))
+
+
+def _fresh_driver_state(driver_id):
+    """R6-24: fresh (is_driver_online, driver_position_updated_at) for one driver,
+    read at call time — i.e. under the job lock, not from the scan. A missing driver
+    (or an unreadable row) counts as offline with no fix, matching the scan's
+    driverless-means-offline rule."""
+    if driver_id is None:
+        return False, None
+    try:
+        from accounts.models import Customer as _Cust
+        row = _Cust.objects.filter(pk=driver_id).values_list(
+            "is_driver_online", "driver_position_updated_at").first()
+    except Exception:
+        return False, None
+    if row is None:
+        return False, None
+    return bool(row[0]), row[1]
+
+
+def _order_is_terminal(tenant_id, order_number) -> bool:
+    """R6-05: has the owner already resolved this failed job by completing or
+    cancelling the order themselves? Reads the tenant-schema order. Fail-open
+    (False) when the tenant/order can't be read — a lookup hiccup must never
+    suppress an alert for a job that still needs a decision."""
+    try:
+        from django_tenants.utils import schema_context
+        from menu.models import Order as _Order
+        from tenancy.models import Tenant as _Tenant
+        schema = _Tenant.objects.filter(id=tenant_id).values_list(
+            "schema_name", flat=True).first()
+        if not schema:
+            return False
+        with schema_context(schema):
+            status = _Order.objects.filter(order_number=order_number).values_list(
+                "status", flat=True).first()
+        return status in (_Order.Status.COMPLETED, _Order.Status.CANCELLED)
+    except Exception:
+        return False
+
+
+# R6-06: en-route allowance — how long an ASSIGNED driver gets to REACH the
+# restaurant before the (c2) release treats them as idle. PROPOSED default, 30 min:
+# twice the pickup SLA — the owner has NOT confirmed this value (D G5 family).
+# Override with the DELIVERY_EN_ROUTE_ALLOWANCE_MINUTES Django setting.
+EN_ROUTE_ALLOWANCE_DEFAULT_MINUTES = 30
+
+
+def _en_route_allowance() -> timedelta:
+    """En-route allowance (R6-06) as a timedelta, from settings or the proposed default."""
+    from django.conf import settings
+    try:
+        minutes = int(getattr(settings, "DELIVERY_EN_ROUTE_ALLOWANCE_MINUTES", EN_ROUTE_ALLOWANCE_DEFAULT_MINUTES)
+                      or EN_ROUTE_ALLOWANCE_DEFAULT_MINUTES)
+    except (TypeError, ValueError):
+        minutes = EN_ROUTE_ALLOWANCE_DEFAULT_MINUTES
     return timedelta(minutes=max(1, minutes))
 
 
@@ -199,12 +266,15 @@ class Command(BaseCommand):
                 # M-15: re-check the age gate under the lock with the locked
                 # row's own clock — the scanned row may be minutes old, and a
                 # job created seconds ago must not be released by a stale scan.
-                # (The driver online flag still comes from the scanned row;
-                # it is seconds old and only gates the 2-min fast path.)
+                # R6-24: re-read the DRIVER row under the lock too — the scanned
+                # drv may be seconds stale, and the 2-min offline fast path turns
+                # on the online flag. A driver who flipped back online + heartbeated
+                # in the gap must not be released on stale offline data.
+                _fresh_online, _fresh_pos = _fresh_driver_state(j.driver_id)
                 if not _pre_pickup_release_due(
                     assigned_at=j.assigned_at, created_at=j.created_at,
-                    driver_online=bool(drv and drv.is_driver_online),
-                    driver_position_updated_at=getattr(drv, "driver_position_updated_at", None),
+                    driver_online=_fresh_online,
+                    driver_position_updated_at=_fresh_pos,
                     now=now,
                 ):
                     continue
@@ -257,6 +327,12 @@ class Command(BaseCommand):
         # (f2) Wave M M-12: same hourly re-alert for long-unclaimed SEARCHING jobs.
         searching_realerted = self._realert_unclaimed_searching_jobs(now, alert_owner)
 
+        # (c3) R6-23: same hourly re-alert for cap-exhausted pre-pickup jobs.
+        capped_realerted = self._realert_capped_assigned_jobs(now, alert_owner)
+
+        # (h) R6-11: watch-only alerts for silent picked-up drivers.
+        silent_alerted = self._watch_silent_picked_up_jobs(now, alert_owner)
+
         # (d) Bounded auto-refund for stuck PRE-PICKUP jobs (money safety net). See
         #     _auto_refund_stuck_jobs — extracted so its money logic is unit-testable.
         refunded = self._auto_refund_stuck_jobs(now, tenant_info, alert_owner)
@@ -275,7 +351,9 @@ class Command(BaseCommand):
             f"sweep_delivery_jobs: repushed={repushed} alerted={alerted} "
             f"released={released} sla_released={sla_released} "
             f"failed_realerted={failed_realerted} "
-            f"searching_realerted={searching_realerted} refunded={refunded} "
+            f"searching_realerted={searching_realerted} "
+            f"capped_realerted={capped_realerted} "
+            f"silent_alerted={silent_alerted} refunded={refunded} "
             f"jobs_backfilled={jobs_backfilled} cashouts_expired={cashouts}"
         ))
 
@@ -297,11 +375,17 @@ class Command(BaseCommand):
 
         from django.db.models import Q as _Q
         sla = _pickup_sla()
+        allowance = _en_route_allowance()
         released = 0
         # Wave M M-15: a NULL assigned_at is releasable too — the clock falls
         # back to created_at under the lock below.
+        # R6-06: the scan is the coarse pre-filter for BOTH clocks — a job is a
+        # candidate when it is past the en-route allowance from assignment, past
+        # the pickup SLA from arrival, or has no assignment stamp at all.
         candidates = DeliveryJob.objects.filter(
-            _Q(assigned_at__isnull=True) | _Q(assigned_at__lte=now - sla),
+            _Q(assigned_at__isnull=True)
+            | _Q(assigned_at__lte=now - allowance)
+            | _Q(at_restaurant_at__lte=now - sla),
             status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
             picked_up_at__isnull=True,
         ).select_related("driver")
@@ -320,17 +404,28 @@ class Command(BaseCommand):
                     continue  # advanced/picked up between the scan and the lock
                 # Re-check the SLA under the lock — the driver may have picked up or
                 # been released by rule (c) between the scan and now.
-                # Wave L L-02: the SLA is food-aware. The clock starts at the later
-                # of assignment and the food-ready time, so a driver waiting on food
-                # that is still cooking is never released as "idle". When no ready
-                # time is set the SLA still measures from assignment, so genuinely
-                # idle drivers are still caught.
+                # R6-06: split SLA. An AT_RESTAURANT job waits the pickup SLA from
+                # ARRIVAL (at_restaurant_at) — food-aware (L-02, preserved): the wait
+                # only counts from the later of arrival and the food-ready time, so
+                # a driver standing at the restaurant while the food is still
+                # cooking is never released as "idle". An ASSIGNED job gets the
+                # longer en-route allowance measured FROM ASSIGNMENT (food readiness
+                # doesn't slow the drive — the driver can always arrive and wait).
+                # Legacy AT_RESTAURANT rows without an arrival stamp fall back to
+                # the en-route clock. Never gate on GPS staleness: the 120-s
+                # heartbeat makes a stationary idle driver look exactly as fresh
+                # as an en-route one.
                 # Wave M M-15: NULL assigned_at → created_at is the clock.
-                sla_start = j.assigned_at if j.assigned_at is not None else j.created_at
-                ready_at = j.food_ready_at
-                if ready_at is not None and sla_start is not None and ready_at > sla_start:
-                    sla_start = ready_at
-                if sla_start is None or sla_start > now - sla:
+                if j.status == DeliveryJob.Status.AT_RESTAURANT and j.at_restaurant_at is not None:
+                    sla_start = j.at_restaurant_at
+                    ready_at = j.food_ready_at
+                    if ready_at is not None and ready_at > sla_start:
+                        sla_start = ready_at
+                    _sla = sla
+                else:
+                    sla_start = j.assigned_at if j.assigned_at is not None else j.created_at
+                    _sla = allowance
+                if sla_start is None or sla_start > now - _sla:
                     continue
                 capped = (j.redispatch_count or 0) >= MAX_AUTO_REDISPATCH
                 if capped:
@@ -365,25 +460,34 @@ class Command(BaseCommand):
             released += 1
         return released
 
-    def _realert_failed_jobs(self, now, alert_owner) -> int:
+    def _realert_failed_jobs(self, now, alert_owner, order_is_terminal=None) -> int:
         """Re-alert the owner for FAILED jobs still awaiting a decision (D G4).
 
         _on_job_failed already alerted once at failure time; this is the hourly
         escalation so a prepaid order's failure can't strand silently forever. Throttled
         to once per FAILED_REALERT_AFTER per job via an atomic owner_alerted_at claim
-        (only the caller that flips the timestamp alerts). Jobs already refunded +
-        cancelled (resolution REFUNDED_CANCELLED) are done and never re-alerted. No money
-        moves and no auto-refund here — the failed-job auto-refund timeout is an owner
+        (only the caller that flips the timestamp alerts). Jobs whose owner already
+        decided are done and never re-alerted: R6-22 — any stamped resolution means
+        decided, so only blank-resolution jobs are scanned (this covers both
+        REFUNDED_CANCELLED and NOSHOW_PAID); R6-05 — a FAILED job whose order is
+        already COMPLETED/CANCELLED was resolved by the owner delivering it
+        themselves, so it is skipped per job (injectable `order_is_terminal` for
+        tests; defaults to the real tenant-schema read, fail-open). No money moves
+        and no auto-refund here — the failed-job auto-refund timeout is an owner
         decision, not yet set. Returns the count re-alerted.
         """
         from django.db.models import Q
         from accounts.models import DeliveryJob
 
+        _order_done = order_is_terminal or _order_is_terminal
         realerted = 0
         for job in DeliveryJob.objects.filter(
             status=DeliveryJob.Status.FAILED,
             failed_at__lte=now - FAILED_REALERT_AFTER,
-        ).exclude(resolution=DeliveryJob.Resolution.REFUNDED_CANCELLED):
+            resolution="",
+        ):
+            if _order_done(job.tenant_id, job.order_number):
+                continue  # R6-05: owner already resolved it via the order
             claimed = DeliveryJob.objects.filter(
                 pk=job.id, status=DeliveryJob.Status.FAILED,
             ).filter(
@@ -401,6 +505,94 @@ class Command(BaseCommand):
                         f"decision — re-dispatch or refund from Orders.")
             realerted += 1
         return realerted
+
+    def _realert_capped_assigned_jobs(self, now, alert_owner) -> int:
+        """R6-23: hourly re-alert for cap-exhausted pre-pickup jobs.
+
+        Rules (c)/(c2) escalate once when redispatch_count hits MAX_AUTO_REDISPATCH
+        and then go silent: every later sweep sees owner_alerted_at set and does
+        nothing. The only backstop was rule (d) auto-refund — and only when the
+        tenant hasn't disabled it. This pass is the (f)/(f2) pattern applied to
+        capped ASSIGNED/AT_RESTAURANT jobs: past FAILED_REALERT_AFTER (60 min) since
+        the first escalation, re-alert hourly via the same atomic owner_alerted_at
+        claim (only the caller that flips the timestamp alerts). Never touches a
+        picked-up job; no money moves. Returns the count re-alerted.
+        """
+        from django.db.models import Q
+        from accounts.models import DeliveryJob
+
+        realerted = 0
+        for job in DeliveryJob.objects.filter(
+            status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+            redispatch_count__gte=MAX_AUTO_REDISPATCH,
+            picked_up_at__isnull=True,
+            owner_alerted_at__lte=now - FAILED_REALERT_AFTER,
+        ):
+            claimed = DeliveryJob.objects.filter(
+                pk=job.id,
+                status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+                redispatch_count__gte=MAX_AUTO_REDISPATCH,
+                picked_up_at__isnull=True,
+            ).filter(
+                Q(owner_alerted_at__isnull=True)
+                | Q(owner_alerted_at__lte=now - FAILED_REALERT_AFTER)
+            ).update(owner_alerted_at=now)
+            if not claimed:
+                continue  # alerted within the last hour — skip
+            alert_owner(job.tenant_id, job.order_number, "Delivery still needs attention",
+                        f"Order #{job.order_number} still has no driver after "
+                        f"{MAX_AUTO_REDISPATCH} re-assignments — please reassign or refund "
+                        "from Orders.")
+            realerted += 1
+        return realerted
+
+    def _watch_silent_picked_up_jobs(self, now, alert_owner) -> int:
+        """R6-11: watch-only alerts for PICKED_UP jobs whose driver went silent.
+
+        A driver who vanishes after pickup (phone dies / app crashes / goes
+        offline) is otherwise invisible: no rule scans PICKED_UP at all, and the
+        sweep's design statement ("never auto-touch picked-up jobs") correctly
+        forbids auto-refund — but nothing ever prompts the owner to look. This
+        pass alerts hourly (same atomic owner_alerted_at claim + 60-min throttle
+        as (f)/(f2)/(c3)) when the driver's position is stale past
+        SILENT_POSITION_AFTER (15 min — well past the 120-s heartbeat) or the
+        pickup itself is older than SILENT_PICKED_UP_AFTER (60 min). NO auto-fail,
+        NO auto-refund, NO status change: the food is with the driver, so this
+        stays an owner decision. The scan gates on picked_up_at 15+ min old so a
+        driver who just picked up (and tapped, proving they are alive) is never
+        nagged about a stale pre-pickup fix. Returns the count alerted.
+        """
+        from django.db.models import Q
+        from accounts.delivery_service import (
+            SILENT_POSITION_AFTER,
+            is_job_driver_silent as _is_silent,
+        )
+        from accounts.models import DeliveryJob
+
+        alerted = 0
+        for job in DeliveryJob.objects.filter(
+            status=DeliveryJob.Status.PICKED_UP,
+            picked_up_at__lte=now - SILENT_POSITION_AFTER,
+        ).select_related("driver"):
+            if not _is_silent(job, now):
+                continue
+            claimed = DeliveryJob.objects.filter(
+                pk=job.id, status=DeliveryJob.Status.PICKED_UP,
+            ).filter(
+                Q(owner_alerted_at__isnull=True)
+                | Q(owner_alerted_at__lte=now - FAILED_REALERT_AFTER)
+            ).update(owner_alerted_at=now)
+            if not claimed:
+                continue  # alerted within the last hour — skip
+            _mins = (
+                int((now - job.picked_up_at).total_seconds() // 60)
+                if job.picked_up_at else 0
+            )
+            alert_owner(job.tenant_id, job.order_number, "Delivery picked up, driver silent",
+                        f"Order #{job.order_number} was picked up {_mins} min ago and the driver "
+                        "hasn't updated position — check with the customer.")
+            alerted += 1
+        return alerted
 
     def _realert_unclaimed_searching_jobs(self, now, alert_owner) -> int:
         """Wave M M-12: re-alert the owner for SEARCHING jobs nobody claimed.
@@ -633,6 +825,11 @@ class Command(BaseCommand):
                         order = Order.objects.filter(order_number=j.order_number).first()
                         if order is None:
                             continue  # order gone — leave the orphan for reconcile_order_refs
+                        # R6-04: the owner already fulfilled (COMPLETED) or cancelled
+                        # this order — never refund it. (The shared helper guards
+                        # COMPLETED too; this skip avoids even calling it.)
+                        if order.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+                            continue
                         # Shared idempotent path: cancel + wallet-refund + reverse loyalty
                         # + restock + stand the driver down + realtime-broadcast to the
                         # customer's tracking page AND the owner's orders screen.

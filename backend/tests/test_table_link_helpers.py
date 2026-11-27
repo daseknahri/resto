@@ -205,34 +205,10 @@ class TableShortUrlTests(SimpleTestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# _table_full_url
+# _table_full_url — REMOVED by R6-30
 # ══════════════════════════════════════════════════════════════════════════════
-
-class TableFullUrlTests(SimpleTestCase):
-    """_table_full_url: {base_url}/menu?table={quote_plus(table.label)}"""
-
-    def test_basic_url_format(self):
-        table = _table(label="Table 1")
-        result = _vs()._table_full_url(table, "https://menu.example.com")
-        self.assertEqual(result, "https://menu.example.com/menu?table=Table+1")
-
-    def test_label_url_encoded(self):
-        table = _table(label="VIP Table & Bar")
-        result = _vs()._table_full_url(table, "https://example.com")
-        self.assertIn("VIP+Table+%26+Bar", result)
-
-    def test_label_with_special_chars_encoded(self):
-        table = _table(label="Table #5")
-        result = _vs()._table_full_url(table, "https://example.com")
-        self.assertNotIn("#", result)  # # must be encoded
-
-    def test_plain_label_no_encoding_needed(self):
-        table = _table(label="TableA")
-        result = _vs()._table_full_url(table, "https://example.com")
-        self.assertEqual(result, "https://example.com/menu?table=TableA")
-
-    def test_base_url_preserved(self):
-        table = _table(label="T")
-        base = "http://localhost:5173"
-        result = _vs()._table_full_url(table, base)
-        self.assertTrue(result.startswith(base + "/menu?table="))
+# The method built {base_url}/menu?table=<label>, a URL no page ever honoured
+# (nothing reads a ?table= query param), so a customer ordering from it placed
+# a non-table order. One URL per table now: the short /t/<slug> link (tested
+# above + in test_table_qr_export.py, which pins the manifest without the
+# full_menu_url column).

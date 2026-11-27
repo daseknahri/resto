@@ -34,6 +34,24 @@
           <p class="text-sm text-red-300">{{ codeError }}</p>
         </div>
 
+        <!-- R6-10: cash collected on handover (COD only) — prefilled with the order
+             total; the driver lowers it when the customer short-pays. The backend
+             flips the order to PAID only when the collection covers the total. -->
+        <div v-if="collectCash" class="space-y-1">
+          <label class="text-xs font-semibold text-slate-300" for="cash-collected-input">{{ t('driver.cashCollectedLabel') }}</label>
+          <input
+            id="cash-collected-input"
+            v-model="cashCollected"
+            type="text"
+            inputmode="decimal"
+            class="ui-input text-lg font-bold tabular-nums"
+            :placeholder="String(orderTotal)"
+            :aria-label="t('driver.cashCollectedLabel')"
+            :disabled="submitting"
+          />
+          <p class="text-[11px] text-slate-400">{{ t('driver.cashCollectedHint') }}</p>
+        </div>
+
         <!-- Photo fallback: driver can't get the code → take a photo instead -->
         <div v-if="proofPhotoPreview" class="space-y-2">
           <img :src="proofPhotoPreview" alt="" class="w-full rounded-xl object-cover" style="max-height:120px" />
@@ -117,6 +135,10 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   /** True while the delivery-code / photo submit is in flight (codeSubmitting). */
   submitting: { type: Boolean, default: false },
+  /** R6-10: True when this job is COD (the driver collects cash on handover). */
+  collectCash: { type: Boolean, default: false },
+  /** R6-10: the order total, used as the cash field's placeholder / default. */
+  orderTotal: { type: [String, Number], default: '' },
 });
 
 /** The typed delivery PIN (codeInput), two-way — the parent's submit reads it. */
@@ -125,6 +147,10 @@ const codeInput = defineModel('codeInput', { type: String, default: '' });
 const codeError = defineModel('codeError', { type: String, default: '' });
 /** The selected proof-photo File (proofPhotoFile), two-way — the parent's submit reads it. */
 const proofPhotoFile = defineModel('proofPhotoFile', { type: Object, default: null });
+/** R6-10: the cash actually collected on handover (cashCollectedInput), two-way —
+    the parent's submit reads it. Prefilled with the order total; the driver lowers
+    it when the customer short-pays. */
+const cashCollected = defineModel('cashCollected', { type: String, default: '' });
 
 const emit = defineEmits(['close', 'submit']);
 

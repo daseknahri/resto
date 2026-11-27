@@ -9,6 +9,36 @@ from decimal import Decimal
 from django.db import transaction
 
 
+# R6-11: a picked-up driver is "silent" when no position fix arrived for this
+# long, or when the pickup itself is this old — the sweep watches (alerts only)
+# and the owner orders list surfaces it. Proposed thresholds (same family as the
+# pickup SLA); the owner has not confirmed them.
+from datetime import timedelta as _td
+
+SILENT_POSITION_AFTER = _td(minutes=15)
+SILENT_PICKED_UP_AFTER = _td(minutes=60)
+
+
+def is_job_driver_silent(job, now) -> bool:
+    """R6-11: is this PICKED_UP job's driver silent? True when the driver has sent
+    no position fix for SILENT_POSITION_AFTER, or the pickup itself is older than
+    SILENT_PICKED_UP_AFTER. Only PICKED_UP jobs can be silent (pre-pickup jobs are
+    covered by the dispatch rules; delivered/failed jobs are terminal). A missing
+    driver row counts as silent — a picked-up job with no driver is definitely
+    unaccounted for."""
+    from .models import DeliveryJob
+    if getattr(job, "status", None) != DeliveryJob.Status.PICKED_UP:
+        return False
+    picked_up_at = getattr(job, "picked_up_at", None)
+    driver = getattr(job, "driver", None)
+    pos_at = getattr(driver, "driver_position_updated_at", None) if driver is not None else None
+    if pos_at is None or pos_at <= now - SILENT_POSITION_AFTER:
+        return True
+    if picked_up_at is not None and picked_up_at <= now - SILENT_PICKED_UP_AFTER:
+        return True
+    return False
+
+
 def cancel_delivery_job_for_order(tenant_id, order_number):
     """Cancel the active delivery job for an order (call this whenever the order is cancelled).
 
@@ -54,9 +84,18 @@ def complete_delivery_job_for_order(tenant_id, order_number):
     ``picked_up`` is an active status — soft-locked out of new offers.
 
     Race-safe via ``select_for_update``; a **no-op** when the job is already terminal (so it can't
-    fight a driver who also tapped delivered) or has no assigned driver. Otherwise marks the job
-    ``DELIVERED`` and credits the driver, reusing ``_credit_driver_earnings`` (idempotent on
-    ``earning:{job.id}``) so double-completion never double-pays. Returns the job (or None).
+    fight a driver who also tapped delivered). Otherwise:
+
+    * PICKED_UP → marks the job ``DELIVERED`` and credits the driver, reusing
+      ``_credit_driver_earnings`` (idempotent on ``earning:{job.id}``) so
+      double-completion never double-pays. Returns the job (or None).
+    * Any other pre-pickup status (ASSIGNED / AT_RESTAURANT / SEARCHING, with or
+      without a driver) → cancels the job instead (R6-25: paying the full
+      ``driver_payout`` for a delivery never made was the leak — the owner can
+      complete an order while the driver is merely ASSIGNED). This subsumes the
+      R6-04 driverless-SEARCHING cancel (same outcome, one path): the owner
+      delivered the food themselves, so there is nobody to credit and the job
+      must not linger as dispatchable.
 
     OPS-5f: the credit is gated on the driver still being ``driver_approved``, exactly as the
     driver's own DELIVERED tap re-checks it (``DriverJobStatusUpdateView`` in ``accounts/views.py``).
@@ -79,8 +118,14 @@ def complete_delivery_job_for_order(tenant_id, order_number):
             .filter(tenant_id=tenant_id, order_number=order_number)
             .first()
         )
-        if job is None or job.is_terminal or not job.driver_id:
+        if job is None or job.is_terminal:
             return job
+        # R6-25: only a PICKED_UP job is credited + closed here. Any other
+        # pre-pickup status is cancelled instead (stand the driver down, no
+        # payout) — see the docstring. cancel_delivery_job_for_order is a
+        # no-op on terminal jobs, so this is safe for every non-PICKED_UP row.
+        if job.status != DeliveryJob.Status.PICKED_UP:
+            return cancel_delivery_job_for_order(tenant_id, order_number)
         # OPS-5f approval re-check at the money-emitting transition. Re-read the flag under
         # the lock; a revoked driver is neither credited nor marked DELIVERED (see docstring).
         if not Customer.objects.filter(pk=job.driver_id, driver_approved=True).exists():

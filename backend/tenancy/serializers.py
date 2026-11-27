@@ -330,6 +330,8 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "referral_reward_points",
             "default_prep_minutes",
             "auto_accept_orders",
+            "pending_sla_minutes",
+            "pending_auto_cancel_minutes",
             "orders_paused_until",
             "busy_extra_minutes",
             "busy_extra_until",
@@ -627,6 +629,33 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
                 missing["lat"] = "Set your location on the map before listing in the public directory."
             if missing:
                 raise serializers.ValidationError(missing)
+        # R6-16: auto-cancel must exceed the escalation SLA to take effect (the
+        # sweep only cancels orders that were already escalated). Enforce only
+        # when one of the two fields is in THIS update, so an unrelated PATCH
+        # on a legacy profile is never blocked by a stale value.
+        if "pending_auto_cancel_minutes" in attrs or "pending_sla_minutes" in attrs:
+            from menu.management.commands.escalate_stale_pending_orders import (
+                DEFAULT_PENDING_SLA_MINUTES as _DEFAULT_SLA,
+            )
+
+            _sla = attrs.get("pending_sla_minutes")
+            if _sla is None and self.instance is not None:
+                _sla = getattr(self.instance, "pending_sla_minutes", None)
+            if not _sla:
+                _sla = _DEFAULT_SLA
+            _cancel = attrs.get("pending_auto_cancel_minutes")
+            if _cancel is None and self.instance is not None:
+                _cancel = getattr(self.instance, "pending_auto_cancel_minutes", None)
+            _cancel = _cancel or 0
+            if _cancel and _cancel <= _sla:
+                raise serializers.ValidationError(
+                    {
+                        "pending_auto_cancel_minutes": (
+                            "Auto-cancel must be more than the escalation time "
+                            f"({_sla} min) — or 0 to never auto-cancel."
+                        )
+                    }
+                )
         return attrs
 
     def update(self, instance, validated_data):

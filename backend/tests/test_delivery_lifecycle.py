@@ -69,6 +69,7 @@ class CompleteDeliveryJobTests(SimpleTestCase):
     def test_picked_up_job_delivered_and_driver_credited(self, mock_dj, mock_customer, _atomic, mock_credit):
         from accounts.delivery_service import complete_delivery_job_for_order
         mock_dj.Status.DELIVERED = "delivered"
+        mock_dj.Status.PICKED_UP = "picked_up"  # R6-25: the gate compares against this
         mock_customer.objects.filter.return_value.exists.return_value = True  # OPS-5f: still approved
         job = SimpleNamespace(is_terminal=False, driver_id=5, status="picked_up",
                               delivered_at=None, save=MagicMock())
@@ -95,13 +96,42 @@ class CompleteDeliveryJobTests(SimpleTestCase):
     @patch("accounts.views._credit_driver_earnings")
     @patch("django.db.transaction.atomic", return_value=_noop_atomic())
     @patch("accounts.models.DeliveryJob")
-    def test_no_driver_is_noop(self, mock_dj, _atomic, mock_credit):
-        # A driverless (still-searching) job on a completed order isn't marked delivered/credited here.
+    def test_driverless_searching_job_is_cancelled(self, mock_dj, _atomic, mock_credit):
+        # R6-04/R6-25: a driverless (still-searching) job on a completed order is
+        # CANCELLED so the sweep can't re-dispatch or auto-refund it — but never
+        # marked delivered/credited (nobody to pay). The cancel now goes through
+        # the shared cancel_delivery_job_for_order (same outcome, one path).
         from accounts.delivery_service import complete_delivery_job_for_order
-        job = SimpleNamespace(is_terminal=False, driver_id=None, status="searching", save=MagicMock())
+        mock_dj.Status.SEARCHING = "searching"
+        mock_dj.Status.CANCELLED = "cancelled"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        job = SimpleNamespace(is_terminal=False, driver_id=None, status="searching",
+                              cancelled_at=None, platform_commission=None, save=MagicMock())
         mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
         complete_delivery_job_for_order(1, "ORD-1")
-        job.save.assert_not_called()
+        self.assertEqual(job.status, "cancelled")
+        self.assertIsNotNone(job.cancelled_at)
+        job.save.assert_called_once_with(
+            update_fields=["status", "cancelled_at", "platform_commission"])
+        mock_credit.assert_not_called()
+
+    @patch("accounts.views._credit_driver_earnings")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_assigned_job_is_cancelled_not_credited(self, mock_dj, _atomic, mock_credit):
+        # R6-25 (pack sketch): the owner completes an order whose driver is merely
+        # ASSIGNED (never picked up) → the job is CANCELLED (stand down, no payout),
+        # never DELIVERED + credited for a delivery never made.
+        from accounts.delivery_service import complete_delivery_job_for_order
+        mock_dj.Status.CANCELLED = "cancelled"
+        mock_dj.Status.PICKED_UP = "picked_up"
+        job = SimpleNamespace(is_terminal=False, driver_id=5, status="assigned",
+                              cancelled_at=None, platform_commission=None, save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        with patch("accounts.tasks.enqueue"):
+            complete_delivery_job_for_order(1, "ORD-1")
+        self.assertEqual(job.status, "cancelled")
+        self.assertIsNotNone(job.cancelled_at)
         mock_credit.assert_not_called()
 
     @patch("accounts.views._credit_driver_earnings")
@@ -368,10 +398,11 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
 
     # ── No-show-paid job must not re-enter dispatch (double-pay guard) ────────────
 
-    def _redispatch(self, *, job_resolution, ledger_exists, redispatch_count=0):
+    def _redispatch(self, *, job_resolution, ledger_exists, redispatch_count=0,
+                    order_status="ready"):
         """Drive a `redispatch` action on a FAILED job with the DB collaborators mocked."""
         import contextlib
-        order = SimpleNamespace(order_number="ORD-1", status="ready", pk=1)
+        order = SimpleNamespace(order_number="ORD-1", status=order_status, pk=1)
         job = MagicMock()
         job.id = 55
         job.status = "failed"
@@ -399,6 +430,41 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data.get("code"), "already_paid")
 
+    def test_redispatch_on_completed_order_returns_409(self):
+        """R6-05: a FAILED job whose order is already COMPLETED can't be re-dispatched —
+        a second driver would be paid for a phantom delivery."""
+        from menu.models import Order
+        resp = self._redispatch(job_resolution="", ledger_exists=False,
+                                order_status=Order.Status.COMPLETED)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "order_completed")
+
+    def test_redispatch_on_cancelled_order_returns_409(self):
+        """R6-05: same guard for a CANCELLED order."""
+        from menu.models import Order
+        resp = self._redispatch(job_resolution="", ledger_exists=False,
+                                order_status=Order.Status.CANCELLED)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "order_cancelled")
+
+    def test_refund_cancel_on_completed_order_returns_409(self):
+        """R6-04: manual refund & cancel on a COMPLETED order → 409; the shared
+        helper is never called (its COMPLETED guard is defence-in-depth)."""
+        from menu.models import Order
+        order = SimpleNamespace(order_number="ORD-1", status=Order.Status.COMPLETED, pk=1)
+        req = self.factory.post("/api/owner/orders/1/delivery-action/",
+                                {"action": "refund_cancel"}, format="json")
+        force_authenticate(req, user=MagicMock(is_authenticated=True))
+        req.tenant = SimpleNamespace(id=1, name="R")
+        with patch("menu.views._can_edit_tenant_order", return_value=True), \
+             patch("menu.views.Order.objects") as om, \
+             patch("menu.views.refund_and_cancel_delivery_order") as helper:
+            om.filter.return_value.first.return_value = order
+            resp = self.view(req, order_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "order_completed")
+        helper.assert_not_called()
+
     def test_redispatch_blocked_by_noshow_ledger_backstop(self):
         """Even if resolution was overwritten, a wallet noshow:{job.id} credit on the ledger
         blocks redispatch — money already left, so refund/cancel is the only safe path."""
@@ -408,11 +474,12 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
 
     # ── confirm_noshow must re-check driver approval before paying (OPS-5f) ───────
 
-    def _confirm_noshow(self, *, driver_approved, driver_id=7, driver_payout=20):
+    def _confirm_noshow(self, *, driver_approved, driver_id=7, driver_payout=20,
+                        order_status="failed"):
         """Drive a `confirm_noshow` action on a FAILED + CUSTOMER_NO_SHOW job with the DB
         collaborators mocked. `driver_approved` drives the Customer.exists() re-check."""
         import contextlib
-        order = SimpleNamespace(order_number="ORD-1", status="failed", pk=1)
+        order = SimpleNamespace(order_number="ORD-1", status=order_status, pk=1)
         job = MagicMock()
         job.id = 55
         job.status = "failed"
@@ -450,6 +517,16 @@ class OwnerDeliveryActionGuardTests(SimpleTestCase):
         # The approval re-check is scoped to this driver AND driver_approved=True.
         Cust.objects.filter.assert_called_once_with(pk=7, driver_approved=True)
         # No money moved and the job was NOT stamped paid.
+        cw.assert_not_called()
+        job.save.assert_not_called()
+
+    def test_confirm_noshow_on_completed_order_returns_409(self):
+        """R6-05: paying a no-show on an already-COMPLETED order → 409; no money moves."""
+        from menu.models import Order
+        resp, cw, Cust, job = self._confirm_noshow(
+            driver_approved=True, order_status=Order.Status.COMPLETED)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "order_completed")
         cw.assert_not_called()
         job.save.assert_not_called()
 

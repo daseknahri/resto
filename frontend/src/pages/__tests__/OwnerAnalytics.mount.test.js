@@ -157,14 +157,14 @@ describe("OwnerAnalytics — mount smoke", () => {
       },
     };
 
-    // _fmtDate() falls back to Date.toDateString() here (tenant.resolvedMeta is null
-    // in the test env → no timezone), so the daily entries must key off toDateString()
-    // for todayStats/yesterdayStats to find them.
+    // _fmtDate() falls back to the UTC date here (tenant.resolvedMeta is null
+    // in the test env → no timezone, R6-26), so the daily entries must key off
+    // the UTC ISO date for todayStats/yesterdayStats to find them.
     const now = new Date();
-    const todayKey = now.toDateString();
+    const todayKey = now.toISOString().slice(0, 10);
     const yst = new Date(now);
     yst.setDate(yst.getDate() - 1);
-    const ystKey = yst.toDateString();
+    const ystKey = yst.toISOString().slice(0, 10);
 
     const insightsPayload = {
       today_reservations: 4,

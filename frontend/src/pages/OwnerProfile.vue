@@ -96,6 +96,45 @@
             </div>
           </div>
 
+          <div class="ui-panel-soft space-y-3 p-4">
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-white">{{ t("orderHandling.unconfirmedTitle") }}</p>
+              <p class="text-xs text-white/55">{{ t("orderHandling.unconfirmedSubtitle") }}</p>
+            </div>
+            <div class="space-y-2">
+              <label for="oh-sla" class="block text-sm font-medium text-white">{{ t("orderHandling.slaLabel") }}</label>
+              <p class="text-xs text-white/55">{{ t("orderHandling.slaHint") }}</p>
+              <div class="flex items-center gap-3">
+                <input
+                  id="oh-sla"
+                  v-model.number="pendingSla"
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  max="120"
+                  class="ui-input w-20 text-center"
+                />
+                <span class="text-sm text-white/70">{{ t("orderHandling.minutesUnit") }}</span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label for="oh-autocancel" class="block text-sm font-medium text-white">{{ t("orderHandling.autoCancelLabel") }}</label>
+              <p class="text-xs text-white/55">{{ t("orderHandling.autoCancelHint") }}</p>
+              <div class="flex items-center gap-3">
+                <input
+                  id="oh-autocancel"
+                  v-model.number="pendingAutoCancel"
+                  type="number"
+                  inputmode="numeric"
+                  min="0"
+                  max="480"
+                  class="ui-input w-20 text-center"
+                />
+                <span class="text-sm text-white/70">{{ t("orderHandling.minutesUnit") }}</span>
+              </div>
+            </div>
+          </div>
+
           <div class="flex items-center justify-between gap-3">
             <p v-if="ohStatus" class="text-sm text-white/70" role="status">{{ ohStatus }}</p>
             <button
@@ -195,7 +234,12 @@ import { profileApi } from "../lib/onboardingApi";
 import {
   isAutoAcceptOn,
   clampPrepMinutes,
+  clampPendingSlaMinutes,
+  clampPendingAutoCancelMinutes,
+  isAutoCancelValid,
   PREP_MINUTES_DEFAULT,
+  PENDING_SLA_DEFAULT,
+  PENDING_AUTO_CANCEL_DEFAULT,
 } from "../lib/orderHandling";
 import StepBrand from "../onboarding/StepBrand.vue";
 import StepPublish from "../onboarding/StepPublish.vue";
@@ -296,14 +340,17 @@ const handlePublish = () => {
   router.push({ name: "owner-launch" });
 };
 
-// ── Order handling (auto-accept + default prep time) ──────────────────────────
-// Self-contained settings block for the 'orders' tab. Loads the two Profile
-// fields, lets the owner toggle auto-accept and tune the default prep/quote
-// time, and saves via the same /profile/ endpoint as the brand form. Default
+// ── Order handling (auto-accept + default prep time + unconfirmed orders) ─────
+// Self-contained settings block for the 'orders' tab. Loads the Profile
+// order-handling fields, lets the owner toggle auto-accept, tune the default
+// prep/quote time, and set the unconfirmed-order SLA + auto-cancel (R6-16),
+// and saves via the same /profile/ endpoint as the brand form. Default
 // auto_accept_orders=false means existing tenants land here with the toggle OFF
 // and see no behaviour change unless they opt in.
 const autoAccept = ref(false);
 const prepMinutes = ref(PREP_MINUTES_DEFAULT);
+const pendingSla = ref(PENDING_SLA_DEFAULT);
+const pendingAutoCancel = ref(PENDING_AUTO_CANCEL_DEFAULT);
 const ohSaving = ref(false);
 const ohStatus = ref("");
 
@@ -311,6 +358,8 @@ const loadOrderHandling = () => {
   const p = tenant.meta?.profile || {};
   autoAccept.value = isAutoAcceptOn(p);
   prepMinutes.value = clampPrepMinutes(p.default_prep_minutes);
+  pendingSla.value = clampPendingSlaMinutes(p.pending_sla_minutes);
+  pendingAutoCancel.value = clampPendingAutoCancelMinutes(p.pending_auto_cancel_minutes);
 };
 
 const saveOrderHandling = async () => {
@@ -319,9 +368,22 @@ const saveOrderHandling = async () => {
   try {
     const minutes = clampPrepMinutes(prepMinutes.value);
     prepMinutes.value = minutes;
+    const sla = clampPendingSlaMinutes(pendingSla.value);
+    pendingSla.value = sla;
+    const autoCancel = clampPendingAutoCancelMinutes(pendingAutoCancel.value);
+    pendingAutoCancel.value = autoCancel;
+    // R6-16: same rule as the backend — auto-cancel must exceed the SLA
+    // (or be 0 = never). Reject here so the owner sees it without a round-trip.
+    if (!isAutoCancelValid(autoCancel, sla)) {
+      ohStatus.value = t("orderHandling.invalidAutoCancel");
+      toast.show(t("orderHandling.invalidAutoCancel"), "error");
+      return;
+    }
     const saved = await profileApi.save({
       auto_accept_orders: autoAccept.value,
       default_prep_minutes: minutes,
+      pending_sla_minutes: sla,
+      pending_auto_cancel_minutes: autoCancel,
     });
     tenant.mergeProfile(saved);
     loadOrderHandling();

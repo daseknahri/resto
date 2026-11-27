@@ -56,9 +56,13 @@ class CompleteDeliveredOrderTests(SimpleTestCase):
 
     # ── D G2: COD cash ledger ───────────────────────────────────────────────
 
-    def _run_completion(self, order, collected):
+    _UNSET = object()
+
+    def _run_completion(self, order, collected, cash_collected=_UNSET):
         """Drive _complete_delivered_order on `order` with the payment ledger mocked
-        to `collected`, and the driver-earning credit stubbed out. Returns the job."""
+        to `collected`, and the driver-earning credit stubbed out. Returns the job.
+        `cash_collected` is the driver-entered handover amount; _UNSET (default)
+        means the client sent none, so the helper defaults to the outstanding."""
         job = _job(order_number=order.order_number)
         with patch("tenancy.models.Tenant") as T, \
              patch("django_tenants.utils.schema_context"), \
@@ -69,8 +73,54 @@ class CompleteDeliveredOrderTests(SimpleTestCase):
             O.objects.filter.return_value.first.return_value = order
             O.Status = Order.Status
             O.PaymentStatus = Order.PaymentStatus
-            _complete_delivered_order(job)
+            if cash_collected is self._UNSET:
+                _complete_delivered_order(job)
+            else:
+                _complete_delivered_order(job, cash_collected=cash_collected)
         return job
+
+    # ── R6-10: driver-entered cash collection ──────────────────────────────────
+
+    def test_cod_short_payment_stays_unpaid(self):
+        """R6-10 (pack sketch): COD 150, driver collected 100 → the order is
+        COMPLETED (the food was delivered) but stays UNPAID with the 50 shortfall
+        visible, and the job records exactly the 100 that changed hands."""
+        from decimal import Decimal
+        order = Order(status=Order.Status.READY, payment_status=Order.PaymentStatus.UNPAID,
+                      order_number="ORD-1", total=Decimal("150.00"),
+                      wallet_amount_paid=Decimal("0"))
+        order.save = MagicMock()
+        job = self._run_completion(order, Decimal("0"), cash_collected=Decimal("100.00"))
+        self.assertEqual(order.status, Order.Status.COMPLETED)
+        self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
+        self.assertIsNone(order.paid_at)
+        self.assertEqual(job.cash_collected, Decimal("100.00"))
+        job.save.assert_called_once_with(update_fields=["cash_collected"])
+
+    def test_cod_full_payment_is_paid(self):
+        """R6-10 (pack sketch): COD 150, driver collected 150 → PAID, 150 recorded."""
+        from decimal import Decimal
+        order = Order(status=Order.Status.READY, payment_status=Order.PaymentStatus.UNPAID,
+                      order_number="ORD-1", total=Decimal("150.00"),
+                      wallet_amount_paid=Decimal("0"))
+        order.save = MagicMock()
+        job = self._run_completion(order, Decimal("0"), cash_collected=Decimal("150.00"))
+        self.assertEqual(order.status, Order.Status.COMPLETED)
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertIsNotNone(order.paid_at)
+        self.assertEqual(job.cash_collected, Decimal("150.00"))
+
+    def test_cod_no_input_defaults_to_full_outstanding(self):
+        """R6-10: old clients send no cash_collected → the helper defaults to the
+        full outstanding (today's behaviour): PAID, 150 recorded."""
+        from decimal import Decimal
+        order = Order(status=Order.Status.READY, payment_status=Order.PaymentStatus.UNPAID,
+                      order_number="ORD-1", total=Decimal("150.00"),
+                      wallet_amount_paid=Decimal("0"))
+        order.save = MagicMock()
+        job = self._run_completion(order, Decimal("0"))
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(job.cash_collected, Decimal("150.00"))
 
     def test_cod_order_records_cash_collected(self):
         """D G2: a COD order (UNPAID, nothing collected) records the full total as

@@ -423,6 +423,13 @@ def restock_ingredients(dish_qty_map):
         Ingredient.objects.filter(pk=_ing_pk).update(stock_quantity=F("stock_quantity") + _delta)
 
 
+class BranchUnavailableError(ValueError):
+    """Raised by resolve_order_branch when an explicit branch_slug matches no
+    ACTIVE branch (R6-17). Callers map it to a 400 ``branch_unavailable`` —
+    the slug was an explicit choice, so silently substituting the default
+    branch would fulfil the order at a location the customer did not choose."""
+
+
 def resolve_order_branch(*, table_slug=None, branch_slug=None):
     """Multi-branch (Phase 3): decide which Branch a new order belongs to.
 
@@ -430,8 +437,10 @@ def resolve_order_branch(*, table_slug=None, branch_slug=None):
     decision D3) → the dine-in table's section's branch → the tenant's
     default branch → the first branch (defensive; the backfill guarantees
     a default exists). Returns None only when the tenant has no branches
-    at all — callers treat None as "unstamped", never as an error, so
-    checkout can never be blocked by branch resolution.
+    at all — callers treat None as "unstamped", never as an error.
+    Raises BranchUnavailableError when an explicit branch_slug is supplied
+    but matches no ACTIVE branch: only a MISSING slug falls through
+    silently to the table/default chain.
     """
     from .models import Branch, TableLink
 
@@ -439,6 +448,10 @@ def resolve_order_branch(*, table_slug=None, branch_slug=None):
         branch = Branch.objects.filter(slug=branch_slug, is_active=True).first()
         if branch is not None:
             return branch
+        # R6-17: an explicit slug that names no active branch is an error,
+        # not "no preference". Falling back to the default would cook the
+        # order at a location the customer did not choose, with no signal.
+        raise BranchUnavailableError(branch_slug)
     if table_slug:
         link = (
             TableLink.objects.filter(slug=table_slug)
