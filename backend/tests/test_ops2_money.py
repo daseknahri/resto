@@ -1391,3 +1391,182 @@ class ZReportCollectedPredicateTests(SimpleTestCase):
                       "collected_qs filter must use paid_at__lt (not created_at)")
         self.assertNotIn("created_at__gte", called_with,
                          "collected_qs must NOT filter on created_at__gte")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# R6-B — by-staff non-ledger wallet (R6-09) + net refund scoping (R6-14)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ZReportR6Tests(SimpleTestCase):
+    """R6-09: by-staff must carry non-ledger wallet money so the table sums to
+    the collected header. R6-14: net only subtracts refunds on collected orders."""
+
+    def _run_report(self, *, cash, wallet, order_values, order_numbers,
+                    refund_agg, refund_rows, op_filter_fn, user_rows=None):
+        order_qs = MagicMock()
+        order_qs.filter.return_value = order_qs
+        order_qs.aggregate.side_effect = [
+            {"tips": Decimal("0")},
+            {"promo": Decimal("0"), "loyalty": Decimal("0")},
+        ]
+        order_qs.count.return_value = len(order_values)
+        order_qs.values.return_value = order_values
+        order_qs.values_list.return_value = order_numbers
+
+        wt_qs = MagicMock()
+        wt_qs.filter.return_value = wt_qs
+        wt_qs.aggregate.return_value = refund_agg
+        wt_qs.values.return_value = refund_rows
+        mock_wt_class = MagicMock()
+        mock_wt_class.Type.REFUND = "REFUND"
+        mock_wt_class.objects.filter.return_value = wt_qs
+
+        oi_qs = MagicMock()
+        oi_qs.__iter__ = lambda s: iter([])
+        food_cost_chain = MagicMock()
+        food_cost_chain.annotate.return_value = food_cost_chain
+        food_cost_chain.filter.return_value = food_cost_chain
+        food_cost_chain.aggregate.return_value = {"total": None}
+        mock_oi_objs = MagicMock()
+        mock_oi_objs.select_related.return_value.filter.return_value = oi_qs
+        mock_oi_objs.filter.return_value = food_cost_chain
+
+        mock_op_objs = MagicMock()
+        mock_op_objs.filter.side_effect = op_filter_fn
+
+        shift_qs = MagicMock()
+        shift_qs.__iter__ = lambda s: iter([])
+        mock_shift_class = MagicMock()
+        mock_shift_class.objects.filter.return_value.order_by.return_value = shift_qs
+
+        mock_user_class = MagicMock()
+        mock_user_class.objects.filter.return_value.values.return_value = user_rows or []
+
+        req = APIRequestFactory().get("/api/owner/z-report/", {"date": "2026-06-10"})
+        req.user = _owner_user()
+        t = _tenant()
+        t.profile = _profile(tz="UTC", cutover=0)
+        req.tenant = t
+        req.path = "/api/owner/z-report/"
+
+        with (
+            patch("menu.revenue.split_revenue_for_orders",
+                  return_value={"cash": Decimal(cash), "wallet": Decimal(wallet)}),
+            patch("menu.views.Order.objects") as mock_order_objs,
+            patch("menu.views.OrderItem.objects", mock_oi_objs),
+            patch("menu.views.OrderPayment.objects", mock_op_objs),
+            patch("accounts.models.WalletTransaction", mock_wt_class),
+            patch("menu.models.Shift", mock_shift_class),
+            patch("accounts.models.User", mock_user_class),
+        ):
+            mock_order_objs.filter.return_value = order_qs
+            resp = OwnerZReportView.as_view()(req)
+        return resp
+
+    @staticmethod
+    def _empty_op_filter(**kwargs):
+        return _make_empty_op_qs()
+
+    def test_by_staff_carries_non_ledger_wallet(self):
+        """R6-09: wallet-only 80 (no ledger rows) + mixed order (30 non-ledger
+        wallet + 70 cash row, both handled by Sam) → by-staff sums to the header
+        (cash 70 + wallet 110 = 180) and the wallet column carries the 110."""
+        def op_filter(**kwargs):
+            m = MagicMock()
+            if "order__paid_at__gte" in kwargs:
+                # Ledger by-staff rows: Sam's cash 70 on the mixed order.
+                rows = MagicMock()
+                rows.__iter__ = lambda s: iter([{
+                    "recorded_by_name": "Sam",
+                    "cash_sum": Decimal("70.00"),
+                    "wallet_sum": Decimal("0"),
+                    "order_count": 1,
+                }])
+                m.values.return_value.annotate.return_value = rows
+            else:
+                # Ledger-wallet-per-order query: no WALLET ledger rows at all.
+                rows = MagicMock()
+                rows.__iter__ = lambda s: iter([])
+                m.values.return_value.annotate.return_value = rows
+            return m
+
+        resp = self._run_report(
+            cash="70.00", wallet="110.00",
+            order_values=[
+                {"id": 1, "handled_by_user_id": 7, "wallet_amount_paid": Decimal("80.00")},
+                {"id": 2, "handled_by_user_id": 7, "wallet_amount_paid": Decimal("30.00")},
+            ],
+            order_numbers=["ORD-1", "ORD-2"],
+            refund_agg={"refund_count": 0, "refund_total": Decimal("0.00")},
+            refund_rows=[],
+            op_filter_fn=op_filter,
+            user_rows=[{"id": 7, "first_name": "Sam", "last_name": "",
+                        "username": "sam", "email": ""}],
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        by_staff = resp.data["by_staff"]
+        self.assertEqual(len(by_staff), 1)
+        row = by_staff[0]
+        self.assertEqual(row["name"], "Sam")
+        self.assertEqual(Decimal(row["collected_cash"]), Decimal("70.00"))
+        self.assertEqual(Decimal(row["collected_wallet"]), Decimal("110.00"))
+        staff_total = sum(
+            Decimal(r["collected_cash"]) + Decimal(r["collected_wallet"]) for r in by_staff
+        )
+        self.assertEqual(staff_total, Decimal(resp.data["collected"]["total"]))
+
+    def test_by_staff_unattributed_wallet_row(self):
+        """R6-09: an order with non-ledger wallet and NO handler lands on an
+        explicit '(unattributed wallet)' row so the table still sums to the header."""
+        resp = self._run_report(
+            cash="0.00", wallet="80.00",
+            order_values=[
+                {"id": 1, "handled_by_user_id": None, "wallet_amount_paid": Decimal("80.00")},
+            ],
+            order_numbers=["ORD-1"],
+            refund_agg={"refund_count": 0, "refund_total": Decimal("0.00")},
+            refund_rows=[],
+            op_filter_fn=self._empty_op_filter,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        by_staff = resp.data["by_staff"]
+        self.assertEqual(len(by_staff), 1)
+        self.assertEqual(by_staff[0]["name"], "(unattributed wallet)")
+        self.assertEqual(Decimal(by_staff[0]["collected_wallet"]), Decimal("80.00"))
+
+    def test_net_excludes_refunds_for_never_collected_orders(self):
+        """R6-14: prepaid 150 cancelled + wallet-refunded the same day, plus one
+        completed 200 order → collected.total 200, refunds.total 150,
+        net 200 (not 50), with the 150 on its own uncollected line."""
+        resp = self._run_report(
+            cash="200.00", wallet="0.00",
+            order_values=[],
+            order_numbers=["ORD-DONE"],
+            refund_agg={"refund_count": 1, "refund_total": Decimal("150.00")},
+            refund_rows=[{"reference": "ORD-CANCELLED", "amount": Decimal("150.00")}],
+            op_filter_fn=self._empty_op_filter,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(Decimal(resp.data["collected"]["total"]), Decimal("200.00"))
+        self.assertEqual(Decimal(resp.data["refunds"]["total"]), Decimal("150.00"))
+        self.assertEqual(
+            Decimal(resp.data["refunds"]["uncollected_total"]), Decimal("150.00")
+        )
+        self.assertEqual(Decimal(resp.data["net"]), Decimal("200.00"))
+
+    def test_net_still_subtracts_refunds_on_collected_orders(self):
+        """R6-14: a 30 refund on the collected order DOES reduce net (200 − 30 = 170)."""
+        resp = self._run_report(
+            cash="200.00", wallet="0.00",
+            order_values=[],
+            order_numbers=["ORD-DONE"],
+            refund_agg={"refund_count": 1, "refund_total": Decimal("30.00")},
+            refund_rows=[{"reference": "ORD-DONE", "amount": Decimal("30.00")}],
+            op_filter_fn=self._empty_op_filter,
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(Decimal(resp.data["refunds"]["total"]), Decimal("30.00"))
+        self.assertEqual(
+            Decimal(resp.data["refunds"]["uncollected_total"]), Decimal("0.00")
+        )
+        self.assertEqual(Decimal(resp.data["net"]), Decimal("170.00"))

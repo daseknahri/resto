@@ -9878,6 +9878,30 @@ class OwnerZReportView(APIView):
         refund_count = int(refund_agg["refund_count"] or 0)
         refund_total = Decimal(str(refund_agg["refund_total"] or 0)).quantize(Decimal("0.01"))
 
+        # R6-14: `net` only subtracts refunds of orders that were counted in
+        # `collected`. A cancelled prepaid order never reaches COMPLETED, so it
+        # never enters collected_qs — but its wallet refund lands in refund_total
+        # the same day, which used to understate net by the full refund. REFUND
+        # rows carry reference=order_number on every creation path (cancel refund,
+        # void/comp refund, correction), so join on it: refunds whose order is in
+        # the collected set reduce net; refunds for orders never collected are
+        # shown on their own line instead of being folded into net.
+        _collected_numbers = set(collected_qs.values_list("order_number", flat=True))
+        _refund_rows = list(
+            _WTx.objects.filter(**refund_filter).values("reference", "amount")
+        )
+        uncollected_refund_total = sum(
+            (
+                Decimal(str(_r["amount"] or 0))
+                for _r in _refund_rows
+                if (_r["reference"] or "") not in _collected_numbers
+            ),
+            Decimal("0"),
+        ).quantize(Decimal("0.01"))
+        collected_refund_total = (refund_total - uncollected_refund_total).quantize(
+            Decimal("0.01")
+        )
+
         # ── Voids in window ───────────────────────────────────────────────────
         # OrderItem.is_voided=True AND voided_at in [start, end).
         # voided_by: the model stores void attribution in OrderItem.void_reason only
@@ -9924,9 +9948,12 @@ class OwnerZReportView(APIView):
             })
 
         # ── By-staff breakdown ────────────────────────────────────────────────
-        # Source: OrderPayment.recorded_by_name for ledger-based payments.
-        # Legacy (one-shot settle) orders have no ledger row; they cannot be
-        # attributed to a specific staff member from existing data.
+        # Source: OrderPayment.recorded_by_name for ledger-based payments, PLUS
+        # each collected order's non-ledger wallet money (R6-09 — see the merge
+        # below). Legacy (one-shot settle) orders have no ledger row; their wallet
+        # money is attributed to the staff member who handled the order
+        # (order.handled_by_user_id), or to an explicit "(unattributed wallet)"
+        # row when no handler is recorded — so the table sums to the header.
         #
         # IMPORTANT: filter on order__paid_at (not OrderPayment.created_at) so that
         # by_staff totals are drawn from the same service-day population as the
@@ -9966,6 +9993,78 @@ class OwnerZReportView(APIView):
             ],
             key=lambda x: x["name"],
         )
+
+        # ── R6-09: fold non-ledger wallet money into by-staff ──────────────
+        # The header's collected.wallet counts ledger rows PLUS legacy wallet
+        # PLUS the per-order mixed extra (split_revenue_for_orders), but the
+        # table above reads ONLY OrderPayment rows — so wallet money paid without
+        # a ledger row (pay-wallet one-shot settles, place-order wallet debits)
+        # was counted in the header and invisible to by-staff. Attribute each
+        # collected order's max(0, wallet_amount_paid − ledger_wallet) to the
+        # staff member who handled the order; orders with no handler go on an
+        # explicit "(unattributed wallet)" row so the table sums to the header.
+        # The "orders" count on a merged row is left as the ledger-order count
+        # (a wallet-only order handled by that staffer does not increment it);
+        # a brand-new row counts its contributing orders.
+        _nlw_by_name = {}
+        try:
+            _collected_rows = list(collected_qs.values(
+                "id", "handled_by_user_id", "wallet_amount_paid"
+            ))
+        except Exception:
+            _collected_rows = []
+        if _collected_rows:
+            _lw_by_order = {
+                _r["order_id"]: Decimal(str(_r["_s"] or 0))
+                for _r in OrderPayment.objects.filter(
+                    order_id__in=[_r["id"] for _r in _collected_rows],
+                    method=OrderPayment.Method.WALLET,
+                ).values("order_id").annotate(_s=_Sum("amount"))
+            }
+            _handler_ids = sorted({
+                _r["handled_by_user_id"] for _r in _collected_rows
+                if _r["handled_by_user_id"]
+            })
+            _handler_names = {}
+            if _handler_ids:
+                from accounts.models import User as _User
+                for _u in _User.objects.filter(id__in=_handler_ids).values(
+                    "id", "first_name", "last_name", "username", "email"
+                ):
+                    _name = (
+                        f"{_u.get('first_name') or ''} {_u.get('last_name') or ''}".strip()
+                        or _u.get("username") or _u.get("email") or "(unknown)"
+                    )
+                    _handler_names[_u["id"]] = _name[:80]
+            for _r in _collected_rows:
+                _nlw = max(
+                    Decimal("0"),
+                    Decimal(str(_r["wallet_amount_paid"] or 0))
+                    - _lw_by_order.get(_r["id"], Decimal("0")),
+                ).quantize(Decimal("0.01"))
+                if _nlw <= Decimal("0"):
+                    continue
+                _hname = _handler_names.get(
+                    _r["handled_by_user_id"], "(unattributed wallet)"
+                )
+                _entry = _nlw_by_name.setdefault(_hname, [Decimal("0"), 0])
+                _entry[0] += _nlw
+                _entry[1] += 1
+            _by_staff_by_name = {row["name"]: row for row in by_staff}
+            for _hname, (_amount, _count) in _nlw_by_name.items():
+                if _hname in _by_staff_by_name:
+                    _row = _by_staff_by_name[_hname]
+                    _row["collected_wallet"] = str(
+                        (Decimal(_row["collected_wallet"]) + _amount).quantize(Decimal("0.01"))
+                    )
+                else:
+                    by_staff.append({
+                        "name": _hname,
+                        "orders": _count,
+                        "collected_cash": "0.00",
+                        "collected_wallet": str(_amount.quantize(Decimal("0.01"))),
+                    })
+            by_staff = sorted(by_staff, key=lambda x: x["name"])
 
         # ── Net cash position ─────────────────────────────────────────────────
         # net_cash_position = collected.cash − cash_refunds_issued
@@ -10068,9 +10167,15 @@ class OwnerZReportView(APIView):
             "refunds": {
                 "count": refund_count,
                 "total": str(refund_total),
+                # R6-14: refunds for orders never counted in collected (e.g. a
+                # cancelled prepaid order refunded the same day) do NOT reduce
+                # net — they are shown on this line instead.
+                "uncollected_total": str(uncollected_refund_total),
                 "basis": (
                     "WalletTransaction REFUND rows created in window. "
-                    "Cash refunds not tracked (no cash-refund ledger exists)."
+                    "Cash refunds not tracked (no cash-refund ledger exists). "
+                    "Only refunds on collected orders reduce net; refunds for "
+                    "orders never collected are on uncollected_total."
                 ),
             },
             "voids": {
@@ -10103,7 +10208,8 @@ class OwnerZReportView(APIView):
                 "food_cost_pct": food_cost_pct,
             },
             "net_cash_position": str(net_cash_position),
-            "net": str((collected_total - refund_total).quantize(Decimal("0.01"))),
+            # R6-14: net = collected − refunds on collected orders only.
+            "net": str((collected_total - collected_refund_total).quantize(Decimal("0.01"))),
         }
 
     def get(self, request, *args, **kwargs):
@@ -10169,6 +10275,7 @@ class OwnerZReportView(APIView):
         writer.writerow(["collected", "total", data["collected"]["total"]])
         writer.writerow(["refunds", "count", data["refunds"]["count"]])
         writer.writerow(["refunds", "total", data["refunds"]["total"]])
+        writer.writerow(["refunds", "uncollected_total", data["refunds"]["uncollected_total"]])
         writer.writerow(["voids", "count", data["voids"]["count"]])
         writer.writerow(["voids", "total", data["voids"]["total"]])
         writer.writerow(["comps", "count", data["comps"]["count"]])
@@ -14993,7 +15100,6 @@ class DrawerCloseView(APIView):
         note = (request.data.get("note") or "").strip()[:300]
         user = request.user
         user_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or ""
-        now = timezone.now()
 
         with transaction.atomic():
             session = DrawerSession.objects.select_for_update().filter(status=DrawerSession.Status.OPEN).order_by("-opened_at").first()
@@ -15003,11 +15109,23 @@ class DrawerCloseView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            # Cash collected = cash payments on completed orders paid since the drawer was opened.
-            # Reuses the same split_revenue_for_orders helper used by the Z-report so the
-            # cash figure is always consistent between the drawer close and the Z-report.
+            # R6-01: capture `now` AFTER the session lock, not before the block —
+            # a cash payment landing between the pre-block capture and the close
+            # commit used to be excluded from this close yet predate the next
+            # session, so it was never counted anywhere. (A payment landing in
+            # the remaining lock-to-commit instant is a known micro-gap; the
+            # window below is paid_at-based, so the next session bounds it.)
+            now = timezone.now()
+
+            # Cash collected = cash payments on PAID orders paid since the drawer was opened.
+            # R6-01: counted by paid_at alone — the old status=COMPLETED predicate
+            # excluded a tab paid in-session but completed after the close (cash in
+            # the till, never counted by any session). Payment and completion are
+            # separate events for a dine-in tab; cash is in the drawer once it is
+            # PAID. Reuses the same split_revenue_for_orders helper used by the
+            # Z-report so the cash figure is always consistent between the drawer
+            # close and the Z-report.
             collected_qs = Order.objects.filter(
-                status=Order.Status.COMPLETED,
                 payment_status=Order.PaymentStatus.PAID,
                 paid_at__gte=session.opened_at,
                 paid_at__lte=now,
@@ -15079,8 +15197,9 @@ class DrawerHistoryView(APIView):
                 # instead of blind. Same formula as DrawerCloseView: opening
                 # float + cash collected since open + pay-ins − pay-outs.
                 _now = timezone.now()
+                # R6-01: same paid_at-only rule as DrawerCloseView — a PAID order
+                # still in the kitchen counts toward the live expected total.
                 _collected_qs = Order.objects.filter(
-                    status=Order.Status.COMPLETED,
                     payment_status=Order.PaymentStatus.PAID,
                     paid_at__gte=sess.opened_at,
                     paid_at__lte=_now,
