@@ -242,29 +242,60 @@ class PrePickupReleaseDueTests(SimpleTestCase):
 
 
 class RealertFailedJobsTests(SimpleTestCase):
-    def _run(self, *, candidate, claimed=1):
+    def _run(self, *, candidate, claimed=1, order_is_terminal=None):
         """Drive Command._realert_failed_jobs.
 
         candidate: the FAILED job the scan yields (or None). claimed: what the atomic
         owner_alerted_at claim returns (1 = this caller won the throttle, 0 = already
-        alerted within the hour). Returns (count, alert_owner_mock).
+        alerted within the hour). order_is_terminal: injectable R6-05 order check
+        (None = the real tenant-schema read, which fail-opens to False under
+        SimpleTestCase's no-DB rule). Returns (count, alert_owner_mock, DJ mock).
         """
         alert_owner = MagicMock()
         with patch("accounts.models.DeliveryJob") as DJ:
             DJ.Status.FAILED = "failed"
-            DJ.Resolution.REFUNDED_CANCELLED = "refunded_cancelled"
-            DJ.objects.filter.return_value.exclude.return_value = (
-                [candidate] if candidate else []
-            )
-            (DJ.objects.filter.return_value.filter.return_value
-                .update.return_value) = claimed
-            count = Command()._realert_failed_jobs(_NOW, alert_owner)
-        return count, alert_owner
+            scan = MagicMock()
+            scan.__iter__.return_value = iter([candidate] if candidate else [])
+            scan.filter.return_value.update.return_value = claimed
+            DJ.objects.filter.return_value = scan
+            count = Command()._realert_failed_jobs(
+                _NOW, alert_owner, order_is_terminal=order_is_terminal)
+        return count, alert_owner, DJ
+
+    def test_scan_only_targets_blank_resolution_jobs(self):
+        """R6-22: the scan filters resolution='' — a FAILED job whose owner already
+        decided (NOSHOW_PAID, REFUNDED_CANCELLED, any stamped resolution) is never
+        even scanned, so it can't re-alert hourly forever."""
+        job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=None)
+        count, alert_owner, DJ = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)  # blank-resolution control still alerts
+        scan_kwargs = DJ.objects.filter.call_args_list[0].kwargs
+        self.assertEqual(scan_kwargs.get("resolution"), "")
+
+    def test_failed_job_with_completed_order_is_not_realerted(self):
+        """R6-05: the owner resolved this FAILED job by completing the order
+        themselves — no hourly 'still failed' nag."""
+        job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=None)
+        count, alert_owner, _DJ = self._run(
+            candidate=job, claimed=1, order_is_terminal=lambda tid, num: True)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_failed_job_with_live_order_still_realerts(self):
+        """R6-05 control: the order check says 'not resolved' → the alert fires."""
+        job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
+                   owner_alerted_at=None)
+        count, alert_owner, _DJ = self._run(
+            candidate=job, claimed=1, order_is_terminal=lambda tid, num: False)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
 
     def test_failed_job_past_an_hour_realerts(self):
         job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
                    owner_alerted_at=None)
-        count, alert_owner = self._run(candidate=job, claimed=1)
+        count, alert_owner, _DJ = self._run(candidate=job, claimed=1)
         self.assertEqual(count, 1)
         alert_owner.assert_called_once()
         _args, _kwargs = alert_owner.call_args
@@ -276,12 +307,12 @@ class RealertFailedJobsTests(SimpleTestCase):
         second alert — the throttle is the atomic update, not a re-read."""
         job = _job(status="failed", failed_at=_NOW - timedelta(minutes=120),
                    owner_alerted_at=_NOW - timedelta(minutes=30))
-        count, alert_owner = self._run(candidate=job, claimed=0)
+        count, alert_owner, _DJ = self._run(candidate=job, claimed=0)
         self.assertEqual(count, 0)
         alert_owner.assert_not_called()
 
     def test_no_failed_jobs_is_noop(self):
-        count, alert_owner = self._run(candidate=None)
+        count, alert_owner, _DJ = self._run(candidate=None)
         self.assertEqual(count, 0)
         alert_owner.assert_not_called()
 
@@ -437,3 +468,121 @@ class BackfillMissingJobsTests(SimpleTestCase):
         )
         self.assertEqual(count, 0)
         DJ.objects.get_or_create.assert_not_called()
+
+
+# ── R6-23: capped pre-pickup jobs re-alert hourly ─────────────────────────────
+
+class RealertCappedAssignedJobsTests(SimpleTestCase):
+    def _run(self, *, candidate, claimed=1):
+        """Drive Command._realert_capped_assigned_jobs.
+
+        candidate: the capped ASSIGNED/AT_RESTAURANT job the scan yields (or None).
+        claimed: what the atomic owner_alerted_at claim returns. Returns
+        (count, alert_owner_mock, DJ mock).
+        """
+        alert_owner = MagicMock()
+        with patch("accounts.models.DeliveryJob") as DJ:
+            DJ.Status.ASSIGNED = "assigned"
+            DJ.Status.AT_RESTAURANT = "at_restaurant"
+            scan = MagicMock()
+            scan.__iter__.return_value = iter([candidate] if candidate else [])
+            scan.filter.return_value.update.return_value = claimed
+            DJ.objects.filter.return_value = scan
+            count = Command()._realert_capped_assigned_jobs(_NOW, alert_owner)
+        return count, alert_owner, DJ
+
+    def test_capped_job_past_an_hour_realerts(self):
+        """R6-23: ASSIGNED, redispatch_count=3, first escalated 2 h ago → 1 re-alert
+        (the (c)/(c2) once-only escalation no longer means silence forever)."""
+        job = _job(status="assigned", redispatch_count=3,
+                   owner_alerted_at=_NOW - timedelta(minutes=120))
+        count, alert_owner, DJ = self._run(candidate=job, claimed=1)
+        self.assertEqual(count, 1)
+        alert_owner.assert_called_once()
+        _args, _kwargs = alert_owner.call_args
+        self.assertEqual(_args[1], "ORD-1")
+        self.assertIn("still needs attention", _args[2])
+        scan_kwargs = DJ.objects.filter.call_args_list[0].kwargs
+        self.assertEqual(scan_kwargs.get("redispatch_count__gte"), 3)
+        self.assertTrue(scan_kwargs.get("picked_up_at__isnull"))
+
+    def test_alert_within_the_hour_is_throttled(self):
+        """The claim lost (escalated < 1 h ago by a previous run): no second alert."""
+        job = _job(status="assigned", redispatch_count=3,
+                   owner_alerted_at=_NOW - timedelta(minutes=30))
+        count, alert_owner, _DJ = self._run(candidate=job, claimed=0)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+    def test_no_capped_jobs_is_noop(self):
+        count, alert_owner, _DJ = self._run(candidate=None)
+        self.assertEqual(count, 0)
+        alert_owner.assert_not_called()
+
+
+# ── R6-24: rule (c) under-lock re-check uses the FRESH driver row ─────────────
+
+class RuleCFreshDriverTests(SimpleTestCase):
+    """Drive the full sweep handle() with the DB collaborators mocked: the scan
+    sees the driver OFFLINE, but the under-lock fresh read says back ONLINE with
+    a fresh GPS fix → the job must NOT be released."""
+
+    def _run_handle(self, *, fresh_online, fresh_pos_at):
+        from types import SimpleNamespace
+        alert_owner = MagicMock()
+        job = _job(status="assigned", assigned_at=_NOW - timedelta(minutes=3),
+                   created_at=_NOW - timedelta(minutes=40))
+        # Scanned driver row: offline + stale GPS (so the pre-lock gate says due).
+        job.driver = SimpleNamespace(
+            is_driver_online=False,
+            driver_position_updated_at=_NOW - timedelta(minutes=20))
+        scan = MagicMock()
+        scan.__iter__.return_value = iter([])
+        scan.select_related.return_value = [job]
+        with patch("accounts.models.DeliveryJob") as DJ, \
+                patch("accounts.dispatch.expire_and_cascade_stale_offers", return_value=0), \
+                patch("accounts.dispatch.offer_to_next_driver") as offer, \
+                patch("accounts.push.push_new_job_to_drivers"), \
+                patch("accounts.tasks.enqueue") as enqueue, \
+                patch("accounts.notifications.record_notification"), \
+                patch("tenancy.models.Tenant") as mock_tenant, \
+                patch("accounts.models.DriverCashoutRequest"), \
+                patch("django.core.cache.cache"), \
+                patch("django.db.transaction.atomic", _noop_cm), \
+                patch("accounts.management.commands.sweep_delivery_jobs.timezone") as mock_tz, \
+                patch("accounts.management.commands.sweep_delivery_jobs._fresh_driver_state",
+                      return_value=(fresh_online, fresh_pos_at)) as fresh:
+            mock_tz.now.return_value = _NOW
+            for name, val in [
+                ("SEARCHING", "searching"), ("ASSIGNED", "assigned"),
+                ("AT_RESTAURANT", "at_restaurant"), ("PICKED_UP", "picked_up"),
+                ("DELIVERED", "delivered"), ("FAILED", "failed"),
+                ("CANCELLED", "cancelled"),
+            ]:
+                setattr(DJ.Status, name, val)
+            DJ.Resolution.REFUNDED_CANCELLED = "refunded_cancelled"
+            DJ.objects.filter.return_value = scan
+            (DJ.objects.select_for_update.return_value
+                .filter.return_value.first.return_value) = job
+            mock_tenant.objects.filter.return_value.exclude.return_value.select_related.return_value = []
+            Command().handle()
+        return job, offer, enqueue, fresh
+
+    def test_driver_back_online_between_scan_and_lock_is_not_released(self):
+        """R6-24: scan says offline, fresh under-lock read says online + GPS 1 min
+        old → not released, no re-offer, no alert."""
+        job, offer, enqueue, fresh = self._run_handle(
+            fresh_online=True, fresh_pos_at=_NOW - timedelta(minutes=1))
+        fresh.assert_called_once_with(job.driver_id)
+        self.assertEqual(job.status, "assigned")
+        job.save.assert_not_called()
+        offer.assert_not_called()
+        enqueue.assert_not_called()
+
+    def test_driver_still_offline_between_scan_and_lock_is_released(self):
+        """Control: the fresh read agrees (offline + stale GPS) → the release proceeds."""
+        job, offer, enqueue, fresh = self._run_handle(
+            fresh_online=False, fresh_pos_at=_NOW - timedelta(minutes=20))
+        fresh.assert_called_once_with(job.driver_id)
+        self.assertEqual(job.status, "searching")
+        offer.assert_called_with(job.id)

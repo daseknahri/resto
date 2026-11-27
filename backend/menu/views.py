@@ -7528,6 +7528,13 @@ class OwnerDeliveryJobActionView(APIView):
 
         # ── Refund & cancel ────────────────────────────────────────────────────
         if action == "refund_cancel":
+            # R6-04: a COMPLETED order was fulfilled — it can't be refunded + cancelled.
+            if order.status == Order.Status.COMPLETED:
+                return Response(
+                    {"detail": "This order was already completed; it can't be refunded and cancelled.",
+                     "code": "order_completed"},
+                    status=status.HTTP_409_CONFLICT,
+                )
             # Shared idempotent implementation (also used by the stuck-job auto-refund
             # sweep): cancel + wallet-refund + reverse loyalty + restock + stand the
             # driver down (Resolution.REFUNDED_CANCELLED) + realtime broadcast. Runs in
@@ -7545,6 +7552,22 @@ class OwnerDeliveryJobActionView(APIView):
             )
             if job is None:
                 return Response({"detail": "No delivery job for this order.", "code": "no_job"}, status=status.HTTP_404_NOT_FOUND)
+
+            # R6-05: the order is already resolved (owner delivered it themselves and
+            # marked it COMPLETED, or it was CANCELLED) — re-dispatching would put a
+            # second driver on a phantom delivery and pay them for it, and paying a
+            # no-show on a resolved order is equally wrong. Refund/cancel is the
+            # only safe path left (and it is itself a no-op on a completed order).
+            if action in ("redispatch", "confirm_noshow") and order.status in (
+                Order.Status.COMPLETED,
+                Order.Status.CANCELLED,
+            ):
+                _code = "order_completed" if order.status == Order.Status.COMPLETED else "order_cancelled"
+                return Response(
+                    {"detail": "This order is already resolved; the delivery job can't be re-dispatched or paid out.",
+                     "code": _code},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             if action == "redispatch":
                 if job.status != _DJob.Status.FAILED:
@@ -8809,7 +8832,10 @@ def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
 
     MUST run inside the order's tenant schema_context: the wallet-refund idempotency key
     and the restock/loyalty queries are tenant-scoped. Returns True if THIS call performed
-    the cancellation, False if the order was already cancelled (a replay).
+    the cancellation, False if the order was already cancelled (a replay) — or already
+    COMPLETED (R6-04: a completed order was fulfilled; cancelling + refunding it would
+    give the customer the food AND the money back. A completed-order refund, if ever
+    wanted, is a separate owner flow).
 
     Caller contract: NEVER call this for a job whose food was already picked up — that is
     an owner decision, not an automatic refund.
@@ -8827,6 +8853,12 @@ def refund_and_cancel_delivery_order(order, tenant_id) -> bool:
         # and skips them. (The wallet credit is separately idempotent via its namespaced key,
         # so it safely replays either way.) Falls back to the passed copy if the row vanished.
         locked = Order.objects.select_for_update().filter(pk=order.pk).first()
+        # R6-04: a COMPLETED order was fulfilled — return False without mutating
+        # anything (no cancel, no wallet refund, no loyalty reversal, no restock).
+        # The stuck-job sweep re-verifies this too, but the shared helper is the
+        # last line of defence for every caller.
+        if (locked or order).status == Order.Status.COMPLETED:
+            return False
         if (locked or order).status != Order.Status.CANCELLED:
             order.status = Order.Status.CANCELLED
             order.status_updated_at = _tz.now()

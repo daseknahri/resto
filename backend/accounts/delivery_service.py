@@ -58,6 +58,11 @@ def complete_delivery_job_for_order(tenant_id, order_number):
     ``DELIVERED`` and credits the driver, reusing ``_credit_driver_earnings`` (idempotent on
     ``earning:{job.id}``) so double-completion never double-pays. Returns the job (or None).
 
+    R6-04: a driverless SEARCHING job is CANCELLED instead — the owner delivered the food
+    themselves, so there is nobody to credit and the job must not linger as dispatchable:
+    left SEARCHING it would be re-offered, re-alerted, or auto-refunded by the sweep even
+    though the order is already COMPLETED.
+
     OPS-5f: the credit is gated on the driver still being ``driver_approved``, exactly as the
     driver's own DELIVERED tap re-checks it (``DriverJobStatusUpdateView`` in ``accounts/views.py``).
     A driver who was approved, accepted + picked up, then had approval revoked (fraud / expired
@@ -79,7 +84,18 @@ def complete_delivery_job_for_order(tenant_id, order_number):
             .filter(tenant_id=tenant_id, order_number=order_number)
             .first()
         )
-        if job is None or job.is_terminal or not job.driver_id:
+        if job is None or job.is_terminal:
+            return job
+        # R6-04: driverless SEARCHING — nobody to credit; cancel the job so the sweep
+        # never re-dispatches or auto-refunds a COMPLETED order. (A SEARCHING job WITH
+        # a driver — an exclusive offer still out — keeps the old path; R6-25 owns the
+        # picked-up gate for driver-held jobs.)
+        if job.status == DeliveryJob.Status.SEARCHING and not job.driver_id:
+            job.status = DeliveryJob.Status.CANCELLED
+            job.cancelled_at = timezone.now()
+            job.save(update_fields=["status", "cancelled_at"])
+            return job
+        if not job.driver_id:
             return job
         # OPS-5f approval re-check at the money-emitting transition. Re-read the flag under
         # the lock; a revoked driver is neither credited nor marked DELIVERED (see docstring).

@@ -33,6 +33,10 @@ Rules (policy: re-dispatch + alert restaurant; refund only as a bounded last res
       (f2) Wave M M-12: the same hourly re-alert for long-UNCLAIMED SEARCHING jobs
       (no driver ever accepted) — rule (b) alerts once at 10 min, then the job went
       silent; past 60 min unclaimed it re-alerts hourly, same throttle.
+  (c3) R6-23: the same hourly re-alert for cap-exhausted pre-pickup jobs
+      (ASSIGNED/AT_RESTAURANT, redispatch_count >= 3) — rules (c)/(c2) escalate once
+      and then go silent forever; past 60 min since that first escalation the owner
+      is nudged again, hourly, same atomic-claim throttle.
   (g) Delivery orders (platform delivery on, not SCHEDULED/CANCELLED/COMPLETED) with no
       DeliveryJob past a short grace (5 min) → create the missing job + start dispatch.
       Covers orders whose job creation failed at checkout (those sites now log instead
@@ -98,6 +102,45 @@ def _pickup_sla() -> timedelta:
     except (TypeError, ValueError):
         minutes = PICKUP_SLA_DEFAULT_MINUTES
     return timedelta(minutes=max(1, minutes))
+
+
+def _fresh_driver_state(driver_id):
+    """R6-24: fresh (is_driver_online, driver_position_updated_at) for one driver,
+    read at call time — i.e. under the job lock, not from the scan. A missing driver
+    (or an unreadable row) counts as offline with no fix, matching the scan's
+    driverless-means-offline rule."""
+    if driver_id is None:
+        return False, None
+    try:
+        from accounts.models import Customer as _Cust
+        row = _Cust.objects.filter(pk=driver_id).values_list(
+            "is_driver_online", "driver_position_updated_at").first()
+    except Exception:
+        return False, None
+    if row is None:
+        return False, None
+    return bool(row[0]), row[1]
+
+
+def _order_is_terminal(tenant_id, order_number) -> bool:
+    """R6-05: has the owner already resolved this failed job by completing or
+    cancelling the order themselves? Reads the tenant-schema order. Fail-open
+    (False) when the tenant/order can't be read — a lookup hiccup must never
+    suppress an alert for a job that still needs a decision."""
+    try:
+        from django_tenants.utils import schema_context
+        from menu.models import Order as _Order
+        from tenancy.models import Tenant as _Tenant
+        schema = _Tenant.objects.filter(id=tenant_id).values_list(
+            "schema_name", flat=True).first()
+        if not schema:
+            return False
+        with schema_context(schema):
+            status = _Order.objects.filter(order_number=order_number).values_list(
+                "status", flat=True).first()
+        return status in (_Order.Status.COMPLETED, _Order.Status.CANCELLED)
+    except Exception:
+        return False
 
 
 class Command(BaseCommand):
@@ -199,12 +242,15 @@ class Command(BaseCommand):
                 # M-15: re-check the age gate under the lock with the locked
                 # row's own clock — the scanned row may be minutes old, and a
                 # job created seconds ago must not be released by a stale scan.
-                # (The driver online flag still comes from the scanned row;
-                # it is seconds old and only gates the 2-min fast path.)
+                # R6-24: re-read the DRIVER row under the lock too — the scanned
+                # drv may be seconds stale, and the 2-min offline fast path turns
+                # on the online flag. A driver who flipped back online + heartbeated
+                # in the gap must not be released on stale offline data.
+                _fresh_online, _fresh_pos = _fresh_driver_state(j.driver_id)
                 if not _pre_pickup_release_due(
                     assigned_at=j.assigned_at, created_at=j.created_at,
-                    driver_online=bool(drv and drv.is_driver_online),
-                    driver_position_updated_at=getattr(drv, "driver_position_updated_at", None),
+                    driver_online=_fresh_online,
+                    driver_position_updated_at=_fresh_pos,
                     now=now,
                 ):
                     continue
@@ -257,6 +303,9 @@ class Command(BaseCommand):
         # (f2) Wave M M-12: same hourly re-alert for long-unclaimed SEARCHING jobs.
         searching_realerted = self._realert_unclaimed_searching_jobs(now, alert_owner)
 
+        # (c3) R6-23: same hourly re-alert for cap-exhausted pre-pickup jobs.
+        capped_realerted = self._realert_capped_assigned_jobs(now, alert_owner)
+
         # (d) Bounded auto-refund for stuck PRE-PICKUP jobs (money safety net). See
         #     _auto_refund_stuck_jobs — extracted so its money logic is unit-testable.
         refunded = self._auto_refund_stuck_jobs(now, tenant_info, alert_owner)
@@ -275,7 +324,8 @@ class Command(BaseCommand):
             f"sweep_delivery_jobs: repushed={repushed} alerted={alerted} "
             f"released={released} sla_released={sla_released} "
             f"failed_realerted={failed_realerted} "
-            f"searching_realerted={searching_realerted} refunded={refunded} "
+            f"searching_realerted={searching_realerted} "
+            f"capped_realerted={capped_realerted} refunded={refunded} "
             f"jobs_backfilled={jobs_backfilled} cashouts_expired={cashouts}"
         ))
 
@@ -365,25 +415,34 @@ class Command(BaseCommand):
             released += 1
         return released
 
-    def _realert_failed_jobs(self, now, alert_owner) -> int:
+    def _realert_failed_jobs(self, now, alert_owner, order_is_terminal=None) -> int:
         """Re-alert the owner for FAILED jobs still awaiting a decision (D G4).
 
         _on_job_failed already alerted once at failure time; this is the hourly
         escalation so a prepaid order's failure can't strand silently forever. Throttled
         to once per FAILED_REALERT_AFTER per job via an atomic owner_alerted_at claim
-        (only the caller that flips the timestamp alerts). Jobs already refunded +
-        cancelled (resolution REFUNDED_CANCELLED) are done and never re-alerted. No money
-        moves and no auto-refund here — the failed-job auto-refund timeout is an owner
+        (only the caller that flips the timestamp alerts). Jobs whose owner already
+        decided are done and never re-alerted: R6-22 — any stamped resolution means
+        decided, so only blank-resolution jobs are scanned (this covers both
+        REFUNDED_CANCELLED and NOSHOW_PAID); R6-05 — a FAILED job whose order is
+        already COMPLETED/CANCELLED was resolved by the owner delivering it
+        themselves, so it is skipped per job (injectable `order_is_terminal` for
+        tests; defaults to the real tenant-schema read, fail-open). No money moves
+        and no auto-refund here — the failed-job auto-refund timeout is an owner
         decision, not yet set. Returns the count re-alerted.
         """
         from django.db.models import Q
         from accounts.models import DeliveryJob
 
+        _order_done = order_is_terminal or _order_is_terminal
         realerted = 0
         for job in DeliveryJob.objects.filter(
             status=DeliveryJob.Status.FAILED,
             failed_at__lte=now - FAILED_REALERT_AFTER,
-        ).exclude(resolution=DeliveryJob.Resolution.REFUNDED_CANCELLED):
+            resolution="",
+        ):
+            if _order_done(job.tenant_id, job.order_number):
+                continue  # R6-05: owner already resolved it via the order
             claimed = DeliveryJob.objects.filter(
                 pk=job.id, status=DeliveryJob.Status.FAILED,
             ).filter(
@@ -399,6 +458,46 @@ class Command(BaseCommand):
             alert_owner(job.tenant_id, job.order_number, "Delivery still failed",
                         f"Order #{job.order_number} failed ({_reason}) and still needs a "
                         f"decision — re-dispatch or refund from Orders.")
+            realerted += 1
+        return realerted
+
+    def _realert_capped_assigned_jobs(self, now, alert_owner) -> int:
+        """R6-23: hourly re-alert for cap-exhausted pre-pickup jobs.
+
+        Rules (c)/(c2) escalate once when redispatch_count hits MAX_AUTO_REDISPATCH
+        and then go silent: every later sweep sees owner_alerted_at set and does
+        nothing. The only backstop was rule (d) auto-refund — and only when the
+        tenant hasn't disabled it. This pass is the (f)/(f2) pattern applied to
+        capped ASSIGNED/AT_RESTAURANT jobs: past FAILED_REALERT_AFTER (60 min) since
+        the first escalation, re-alert hourly via the same atomic owner_alerted_at
+        claim (only the caller that flips the timestamp alerts). Never touches a
+        picked-up job; no money moves. Returns the count re-alerted.
+        """
+        from django.db.models import Q
+        from accounts.models import DeliveryJob
+
+        realerted = 0
+        for job in DeliveryJob.objects.filter(
+            status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+            redispatch_count__gte=MAX_AUTO_REDISPATCH,
+            picked_up_at__isnull=True,
+            owner_alerted_at__lte=now - FAILED_REALERT_AFTER,
+        ):
+            claimed = DeliveryJob.objects.filter(
+                pk=job.id,
+                status__in=[DeliveryJob.Status.ASSIGNED, DeliveryJob.Status.AT_RESTAURANT],
+                redispatch_count__gte=MAX_AUTO_REDISPATCH,
+                picked_up_at__isnull=True,
+            ).filter(
+                Q(owner_alerted_at__isnull=True)
+                | Q(owner_alerted_at__lte=now - FAILED_REALERT_AFTER)
+            ).update(owner_alerted_at=now)
+            if not claimed:
+                continue  # alerted within the last hour — skip
+            alert_owner(job.tenant_id, job.order_number, "Delivery still needs attention",
+                        f"Order #{job.order_number} still has no driver after "
+                        f"{MAX_AUTO_REDISPATCH} re-assignments — please reassign or refund "
+                        "from Orders.")
             realerted += 1
         return realerted
 
@@ -633,6 +732,11 @@ class Command(BaseCommand):
                         order = Order.objects.filter(order_number=j.order_number).first()
                         if order is None:
                             continue  # order gone — leave the orphan for reconcile_order_refs
+                        # R6-04: the owner already fulfilled (COMPLETED) or cancelled
+                        # this order — never refund it. (The shared helper guards
+                        # COMPLETED too; this skip avoids even calling it.)
+                        if order.status in (Order.Status.COMPLETED, Order.Status.CANCELLED):
+                            continue
                         # Shared idempotent path: cancel + wallet-refund + reverse loyalty
                         # + restock + stand the driver down + realtime-broadcast to the
                         # customer's tracking page AND the owner's orders screen.

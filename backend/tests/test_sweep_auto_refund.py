@@ -98,6 +98,25 @@ class RefundAndCancelHelperTests(SimpleTestCase):
         loyalty_m.assert_not_called()   # NOT re-clawed
         restock_m.assert_not_called()   # NOT re-restocked
 
+    def test_completed_order_is_never_cancelled_or_refunded(
+        self, refund_m, loyalty_m, restock_m, broadcast_m, cancel_job_m, dj_m, order_m
+    ):
+        """R6-04: a COMPLETED order was fulfilled — the helper returns False without
+        mutating anything: no cancel, no wallet refund, no loyalty reversal, no
+        restock, no broadcast. The customer got the food; refunding it too would
+        be a double giveaway."""
+        order_m.Status.COMPLETED = Order.Status.COMPLETED
+        self._wire_lock(order_m, locked_status=Order.Status.COMPLETED)
+        order = self._order(Order.Status.COMPLETED)
+        result = refund_and_cancel_delivery_order(order, tenant_id=1)
+
+        self.assertFalse(result)
+        self.assertEqual(order.status, Order.Status.COMPLETED)  # untouched
+        refund_m.assert_not_called()
+        loyalty_m.assert_not_called()
+        restock_m.assert_not_called()
+        broadcast_m.assert_not_called()
+
     def test_concurrent_peer_cancelled_under_lock_skips_reversal(
         self, refund_m, loyalty_m, restock_m, broadcast_m, cancel_job_m, dj_m, order_m
     ):
@@ -140,7 +159,8 @@ def _job(*, job_id=1, tenant_id=1, order="ORD-1", age_min=40,
 
 
 class AutoRefundSweepPassTests(SimpleTestCase):
-    def _run(self, *, candidate, locked_job, deadline=30, order="present", refund_result=True):
+    def _run(self, *, candidate, locked_job, deadline=30, order="present", refund_result=True,
+             order_status=None):
         """Drive Command._auto_refund_stuck_jobs with the DB collaborators mocked.
 
         candidate     : the job the (mocked) candidate scan yields (or None for none).
@@ -153,6 +173,8 @@ class AutoRefundSweepPassTests(SimpleTestCase):
         Returns (refunded_count, refund_helper_mock, alert_owner_mock, order_obj).
         """
         order_obj = MagicMock() if order == "present" else None
+        if order_obj is not None and order_status is not None:
+            order_obj.status = order_status
         alert_owner = MagicMock()
         tenant_info = lambda tid: ("Resto", "schema1")  # noqa: E731
 
@@ -169,6 +191,8 @@ class AutoRefundSweepPassTests(SimpleTestCase):
                 ("DELIVERED", "delivered"), ("FAILED", "failed"), ("CANCELLED", "cancelled"),
             ]:
                 setattr(DJ.Status, name, val)
+            OrderM.Status.COMPLETED = "completed"
+            OrderM.Status.CANCELLED = "cancelled"
             DJ.objects.filter.return_value.filter.return_value = [candidate] if candidate else []
             (DJ.objects.select_for_update.return_value
                 .filter.return_value.exclude.return_value.first.return_value) = locked_job
@@ -254,6 +278,29 @@ class AutoRefundSweepPassTests(SimpleTestCase):
         count, refund, alert_owner, _ = self._run(candidate=job, locked_job=job, deadline=30, order=None)
         self.assertEqual(count, 0)
         refund.assert_not_called()
+
+    def test_completed_order_is_never_auto_refunded(self):
+        """R6-04: the owner delivered the food themselves and marked the order
+        COMPLETED while the job was still SEARCHING — the sweep must NOT cancel +
+        refund it 31 min later (food AND money back)."""
+        job = _job(age_min=40, status="searching", driver_id=None)
+        count, refund, alert_owner, _ = self._run(
+            candidate=job, locked_job=job, deadline=30, order_status="completed"
+        )
+        self.assertEqual(count, 0)
+        refund.assert_not_called()
+        alert_owner.assert_not_called()
+
+    def test_cancelled_order_is_never_auto_refunded(self):
+        """R6-04: same skip for an already-CANCELLED order (belt-and-braces — the
+        helper would replay-refund-idempotently, but the sweep shouldn't call it)."""
+        job = _job(age_min=40, status="searching", driver_id=None)
+        count, refund, alert_owner, _ = self._run(
+            candidate=job, locked_job=job, deadline=30, order_status="cancelled"
+        )
+        self.assertEqual(count, 0)
+        refund.assert_not_called()
+        alert_owner.assert_not_called()
 
     def test_no_candidates_is_noop(self):
         count, refund, alert_owner, _ = self._run(candidate=None, locked_job=None, deadline=30)
