@@ -158,3 +158,77 @@ class ProfileSerializerTests(SimpleTestCase):
             serializer.validate_tagline_i18n(
                 {"fr": "Menu rapide", "ar": "قائمة", "en": "Fast menu", "en-us": "Fast menu US"}
             )
+
+# ── R6-16: pending_sla_minutes / pending_auto_cancel_minutes ─────────────
+# The sweep only cancels orders that were already escalated, so auto-cancel
+# must exceed the escalation SLA (or be 0 = never). The rule fires only when
+# one of the two fields is in THIS update, so an unrelated PATCH on a legacy
+# profile is never blocked by a stale value.
+
+class ProfileSerializerSlaTests(SimpleTestCase):
+    def _profile(self, **kwargs):
+        tenant = Tenant(name="Demo", slug="demo", plan=Plan(code="basic", name="Basic"))
+        return Profile(tenant=tenant, **kwargs)
+
+    def test_sla_and_auto_cancel_fields_are_exposed(self):
+        serializer = ProfileSerializer()
+        self.assertIn("pending_sla_minutes", serializer.fields)
+        self.assertIn("pending_auto_cancel_minutes", serializer.fields)
+
+    def test_serializer_data_exposes_stored_values(self):
+        profile = self._profile(pending_sla_minutes=15, pending_auto_cancel_minutes=90)
+        data = ProfileSerializer(instance=profile).data
+        self.assertEqual(data["pending_sla_minutes"], 15)
+        self.assertEqual(data["pending_auto_cancel_minutes"], 90)
+
+    def test_auto_cancel_above_default_sla_is_valid(self):
+        # No instance SLA -> platform default 10; 60 > 10.
+        serializer = ProfileSerializer(data={"pending_auto_cancel_minutes": 60})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["pending_auto_cancel_minutes"], 60)
+
+    def test_auto_cancel_200_with_sla_60_is_valid(self):
+        # Pack sketch: PATCH 60 -> 200 persisted.
+        serializer = ProfileSerializer(
+            data={"pending_sla_minutes": 60, "pending_auto_cancel_minutes": 200}
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["pending_sla_minutes"], 60)
+        self.assertEqual(serializer.validated_data["pending_auto_cancel_minutes"], 200)
+
+    def test_auto_cancel_below_default_sla_is_rejected(self):
+        # Pack sketch: PATCH 5 (< SLA 10) -> 400.
+        serializer = ProfileSerializer(data={"pending_auto_cancel_minutes": 5})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("pending_auto_cancel_minutes", serializer.errors)
+
+    def test_auto_cancel_equal_to_sla_is_rejected(self):
+        profile = self._profile(pending_sla_minutes=60)
+        serializer = ProfileSerializer(
+            instance=profile, data={"pending_auto_cancel_minutes": 60}, partial=True
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("pending_auto_cancel_minutes", serializer.errors)
+
+    def test_auto_cancel_below_instance_sla_is_rejected(self):
+        profile = self._profile(pending_sla_minutes=60)
+        serializer = ProfileSerializer(
+            instance=profile, data={"pending_auto_cancel_minutes": 30}, partial=True
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("pending_auto_cancel_minutes", serializer.errors)
+
+    def test_auto_cancel_zero_never_is_valid(self):
+        serializer = ProfileSerializer(data={"pending_auto_cancel_minutes": 0})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_unrelated_patch_is_not_blocked_by_stale_values(self):
+        # Legacy profile already holding a too-small auto-cancel (set before
+        # the rule existed): editing an unrelated field must still work.
+        profile = self._profile(
+            pending_sla_minutes=10, pending_auto_cancel_minutes=5, tagline="Old"
+        )
+        serializer = ProfileSerializer(
+            instance=profile, data={"tagline": "New"}, partial=True
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)

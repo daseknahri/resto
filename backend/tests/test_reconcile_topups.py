@@ -121,3 +121,108 @@ class PspSiteUrlCheckTests(SimpleTestCase):
         from config.checks import psp_site_url_configured
         with override_settings(DEBUG=True, PSP_TOPUP_ENABLED=True, PSP_SITE_URL="not-a-url"):
             self.assertEqual(psp_site_url_configured(None), [])
+
+# ── R6-19: --reconcile-all (hourly Beat mode) ─────────────────────────────
+# Same double-credit guards as the single-session path; one bad session is
+# logged and skipped, never stops the batch; each auto-credit is logged on the
+# payments channel (money moved without a webhook).
+
+from types import SimpleNamespace as _SimpleNamespace
+
+
+class ReconcileAllTests(SimpleTestCase):
+    def _run_all(self, attempts, sessions, *, exists=None):
+        """attempts: list of SimpleNamespace(session_id=...).
+        sessions: {session_id: stripe session dict OR Exception to raise}.
+        exists: True/False (pre-check return) or list side_effect for the
+        TOPUP-row exists() calls (pre-check + inner check per attempt)."""
+        from unittest.mock import MagicMock as _MagicMock
+
+        stdout = StringIO()
+        stripe_mock = _MagicMock()
+
+        def _retrieve(sid):
+            result = sessions[sid]
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        stripe_mock.checkout.Session.retrieve.side_effect = _retrieve
+        with patch.dict(sys.modules, {"stripe": stripe_mock}), \
+                patch("accounts.models.WalletTransaction") as WT, \
+                patch("accounts.models.CustomerTopUpAttempt") as Attempt, \
+                patch("accounts.wallet_service.credit_wallet") as credit:
+            WT.Type.TOPUP = "topup"
+            Attempt.Status.CREATED = "created"
+            Attempt.Status.CREDITED = "credited"
+            Attempt.objects.filter.return_value.order_by.return_value.__getitem__.return_value = attempts
+            if isinstance(exists, list):
+                WT.objects.filter.return_value.exists.side_effect = exists
+            else:
+                WT.objects.filter.return_value.exists.return_value = exists
+            with override_settings(PSP_STRIPE_SECRET_KEY="sk_test_x"):
+                call_command("reconcile_topups", "--reconcile-all", stdout=stdout)
+        return stdout.getvalue(), credit, WT, Attempt
+
+    def _attempt(self, session_id="cs_test_123"):
+        return _SimpleNamespace(
+            session_id=session_id, customer_id=7, amount="50.00", status="created"
+        )
+
+    def test_reconcile_all_credits_paid_attempt_once(self):
+        # Pack sketch: attempt CREATED 2h ago, Stripe session paid, no TOPUP
+        # row -> scheduled run credits once.
+        out, credit, WT, Attempt = self._run_all(
+            [self._attempt()], {"cs_test_123": _stripe_session()}, exists=[False, False]
+        )
+        credit.assert_called_once()
+        _, kwargs = credit.call_args
+        self.assertEqual(kwargs["idempotency_key"], "reconciled:cs_test_123")
+        self.assertEqual(kwargs["reference"], "stripe:cs_test_123")
+        self.assertIn("1 credited", out)
+
+    def test_reconcile_all_second_run_is_noop(self):
+        # Pack sketch: run again -> no-op (TOPUP row now exists).
+        out, credit, WT, Attempt = self._run_all(
+            [self._attempt()], {"cs_test_123": _stripe_session()}, exists=True
+        )
+        credit.assert_not_called()
+        self.assertIn("0 credited, 1 already credited", out)
+
+    def test_reconcile_all_skips_unpaid_attempt(self):
+        out, credit, WT, Attempt = self._run_all(
+            [self._attempt()],
+            {"cs_test_123": _stripe_session(paid=False)},
+            exists=[False, False],
+        )
+        credit.assert_not_called()
+        self.assertIn("1 not paid", out)
+
+    def test_reconcile_all_continues_past_a_failing_attempt(self):
+        # One bad session (Stripe lookup raises) must not strand the rest.
+        out, credit, WT, Attempt = self._run_all(
+            [self._attempt("cs_test_123"), self._attempt("cs_bad")],
+            {
+                "cs_test_123": _stripe_session(),
+                "cs_bad": Exception("boom"),
+            },
+            exists=[False, False, False],
+        )
+        credit.assert_called_once()
+        self.assertIn("1 credited", out)
+        self.assertIn("1 failed", out)
+
+
+class ReconcileTopupsBeatTests(SimpleTestCase):
+    def test_command_scheduled_hourly(self):
+        # R6-19: the reconciler runs on Beat, hourly.
+        from django.conf import settings
+
+        entries = {e["task"]: e for e in settings.CELERY_BEAT_SCHEDULE.values()}
+        self.assertIn("cron.reconcile_topups", entries)
+        self.assertEqual(entries["cron.reconcile_topups"]["schedule"], 3600.0)
+
+    def test_cron_task_exists(self):
+        from accounts.tasks import reconcile_topups
+
+        self.assertEqual(reconcile_topups.name, "cron.reconcile_topups")

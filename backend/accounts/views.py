@@ -10558,7 +10558,10 @@ class CustomerTopUpWebhookView(APIView):
         # convenience. Checked BEFORE importing stripe so the guard holds even where the SDK
         # isn't installed.
         if not webhook_secret and not settings.DEBUG:
-            logger.error(
+            # R6-19: same payments channel as the other webhook failure paths
+            # (signature failure, bad JSON) — the operator's payments alert
+            # must see this one too.
+            payments_logger.error(
                 "TOPUP_WEBHOOK_FAILED status=503: PSP_TOPUP_ENABLED but "
                 "PSP_STRIPE_WEBHOOK_SECRET is unset"
             )

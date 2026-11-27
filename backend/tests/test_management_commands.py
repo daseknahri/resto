@@ -53,7 +53,10 @@ class EnsurePlatformAdminCommandTests(SimpleTestCase):
         self.assertTrue(user_obj.is_superuser)
 
     @patch("accounts.management.commands.ensure_platform_admin.get_user_model")
-    def test_updates_existing_admin_and_outputs_updated(self, get_user_model_mock):
+    def test_existing_admin_password_is_not_reset(self, get_user_model_mock):
+        # R6-15 (create-only): an existing account keeps its password — the
+        # env var / --password is the INITIAL password only. A rotated
+        # password must survive the next deploy (entrypoint runs this on boot).
         User = MagicMock()
         user_obj = MagicMock()
         User.Roles.PLATFORM_SUPERADMIN = "platform_superadmin"
@@ -61,9 +64,13 @@ class EnsurePlatformAdminCommandTests(SimpleTestCase):
         get_user_model_mock.return_value = User
 
         out = self._run(email="admin@example.com", password="NewPass!")
-        self.assertIn("updated", out.lower())
-        user_obj.set_password.assert_called_once_with("NewPass!")
+        self.assertIn("already exists", out.lower())
+        self.assertIn("skipping password set", out.lower())
+        user_obj.set_password.assert_not_called()
         user_obj.save.assert_called_once()
+        self.assertEqual(user_obj.role, User.Roles.PLATFORM_SUPERADMIN)
+        self.assertTrue(user_obj.is_staff)
+        self.assertTrue(user_obj.is_superuser)
 
     @patch("accounts.management.commands.ensure_platform_admin.get_user_model")
     def test_email_lowercased_and_stripped(self, get_user_model_mock):

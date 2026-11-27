@@ -43,6 +43,8 @@ fi
 # prefers the PLATFORM_ADMIN_PASSWORD env var, so export it (mapping from the
 # existing DJANGO_SUPERADMIN_PASSWORD secret for backward compatibility) and call
 # the command WITHOUT --password.
+# R6-15: the exported password is the INITIAL password only — an existing
+# account keeps its current password; rotation in Django admin survives redeploys.
 if [ -n "${DJANGO_SUPERADMIN_EMAIL:-}" ] && [ -n "${DJANGO_SUPERADMIN_PASSWORD:-}" ]; then
   export PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD:-$DJANGO_SUPERADMIN_PASSWORD}"
   python manage.py ensure_platform_admin \

@@ -361,6 +361,14 @@ CELERY_BEAT_SCHEDULE = {
         # a flagged drift is repaired by a human running the command with --fix after triage.
         "schedule": 6 * 60 * 60.0,
     },
+    "reconcile-topups": {
+        "task": "cron.reconcile_topups",
+        # R6-19: hourly — a missed Stripe webhook (secret rotation, transient
+        # 5xx, expired retries) must not strand a paid top-up forever. The
+        # command credits paid sessions from Stripe's own record (double-credit
+        # guards untouched) and alerts on the payments channel per credit.
+        "schedule": 3600.0,
+    },
     "reconcile-order-refs": {
         "task": "cron.reconcile_order_refs",
         # daily — DATA-1: detect public order-refs (DeliveryJob/CustomerOrderRef/CustomerRating)

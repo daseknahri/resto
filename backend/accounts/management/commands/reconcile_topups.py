@@ -7,6 +7,7 @@ This command closes that gap by hand, from Stripe's own record:
 
     python manage.py reconcile_topups <stripe_checkout_session_id>
     python manage.py reconcile_topups --list-uncredited
+    python manage.py reconcile_topups --reconcile-all
 
 Safety:
   * Credits ONLY when Stripe reports payment_status == "paid".
@@ -18,6 +19,16 @@ Safety:
     never the client-echoed metadata amount (same rule as the webhook, MONEY-3).
   * Read-only by default for --list-uncredited (lists attempt rows with no
     TOPUP row); the credit path never runs without an explicit session id.
+  * R6-19: --reconcile-all (hourly Beat, cron.reconcile_topups) closes the
+    loop for good — a missed webhook (secret rotation, transient 5xx, expired
+    retries) must not strand a paid top-up forever. It iterates the same
+    uncredited CREATED attempts the list mode shows and credits the paid ones
+    from Stripe's own record, one attempt at a time: a single bad session is
+    logged on the payments channel and the batch continues. Each auto-credit
+    is ALSO logged on the payments channel (money moved without a webhook —
+    the operator should know the reconciler, not Stripe, credited it). The
+    double-credit guards (TOPUP-row check + idempotency_key) are untouched,
+    so a late webhook landing after the reconciler is still a no-op.
 
 Requires the stripe SDK + PSP_STRIPE_SECRET_KEY. No live Stripe calls in tests
 (mock the stripe module).
@@ -43,6 +54,12 @@ class Command(BaseCommand):
             "--list-uncredited", action="store_true",
             help="List top-up attempt rows with no TOPUP WalletTransaction yet (read-only).",
         )
+        parser.add_argument(
+            "--reconcile-all", action="store_true",
+            help="Credit every uncredited CREATED attempt whose Stripe session is "
+            "paid (hourly Beat mode, R6-19). One bad session is logged and "
+            "skipped, never stops the batch.",
+        )
 
     def handle(self, *args, **options):
         if options["list_uncredited"]:
@@ -51,11 +68,44 @@ class Command(BaseCommand):
             # value to stdout, and an int has no .endswith (Django raises).
             self._list_uncredited()
             return
+        if options["reconcile_all"]:
+            # R6-19: beat mode — every uncredited CREATED attempt, best-effort.
+            self._reconcile_all()
+            return
 
         session_id = options["session_id"]
         if not session_id:
-            raise CommandError("session_id is required (or pass --list-uncredited).")
+            raise CommandError(
+                "session_id is required (or pass --list-uncredited / --reconcile-all)."
+            )
 
+        status, amount, customer_id, payment_status = self._reconcile_session(session_id)
+        if status == "already_credited":
+            self.stdout.write(
+                f"Session {session_id} already credited (TOPUP row exists) — nothing to do."
+            )
+        elif status == "not_paid":
+            self.stdout.write(
+                f"Session {session_id} payment_status={payment_status!r} — "
+                "not paid, nothing credited."
+            )
+        else:
+            self.stdout.write(self.style.SUCCESS(
+                f"Session {session_id} reconciled: credited {amount} to customer {customer_id}."
+            ))
+        return
+
+    def _reconcile_session(self, session_id):
+        """Credit one session if Stripe says paid and no TOPUP row exists yet.
+
+        Returns (status, amount, customer_id, payment_status) with status in
+        {"credited", "already_credited", "not_paid"}. The double-credit guards
+        (TOPUP-row check + idempotency_key="reconciled:<session_id>") are
+        unchanged from the M-07 single-session path — this is that path,
+        factored out so --reconcile-all can call it per attempt. Lookup and
+        metadata problems raise CommandError (the caller decides: abort for a
+        single session, log-and-continue for the batch).
+        """
         try:
             import stripe as _stripe
         except ImportError:
@@ -69,22 +119,16 @@ class Command(BaseCommand):
         except Exception as exc:
             raise CommandError(f"Stripe lookup failed for {session_id}: {exc}")
 
-        if session.get("payment_status") != "paid":
-            self.stdout.write(
-                f"Session {session_id} payment_status={session.get('payment_status')!r} — "
-                "not paid, nothing credited."
-            )
-            return
+        payment_status = session.get("payment_status")
+        if payment_status != "paid":
+            return ("not_paid", None, None, payment_status)
 
         from accounts.models import CustomerTopUpAttempt, WalletTransaction
         if WalletTransaction.objects.filter(
             reference=f"stripe:{session_id}",
             type=WalletTransaction.Type.TOPUP,
         ).exists():
-            self.stdout.write(
-                f"Session {session_id} already credited (TOPUP row exists) — nothing to do."
-            )
-            return
+            return ("already_credited", None, None, payment_status)
 
         meta = session.get("metadata") or {}
         customer_id = meta.get("customer_id")
@@ -118,9 +162,55 @@ class Command(BaseCommand):
             payments_logger.warning(
                 "Top-up attempt row not marked credited session_id=%s", session_id
             )
-        self.stdout.write(self.style.SUCCESS(
-            f"Session {session_id} reconciled: credited {amount_value} to customer {customer_id}."
-        ))
+        return ("credited", amount_value, customer_id, payment_status)
+
+    def _reconcile_all(self):
+        """Beat mode (R6-19, hourly): reconcile every uncredited CREATED attempt.
+
+        One attempt's failure (Stripe lookup, bad metadata) is logged on the
+        payments channel and the batch continues — a single bad session must
+        not strand the rest. Each credit is also logged on the payments
+        channel: money moved without a webhook, so the operator should know
+        the reconciler (not Stripe's webhook) credited it. The per-session
+        double-credit guards live in _reconcile_session and are unchanged.
+        """
+        from accounts.models import CustomerTopUpAttempt, WalletTransaction
+        attempts = CustomerTopUpAttempt.objects.filter(
+            status=CustomerTopUpAttempt.Status.CREATED,
+        ).order_by("-created_at")[:100]
+        credited = already = not_paid = failed = 0
+        for attempt in attempts:
+            session_id = attempt.session_id
+            if WalletTransaction.objects.filter(
+                reference=f"stripe:{session_id}",
+                type=WalletTransaction.Type.TOPUP,
+            ).exists():
+                already += 1
+                continue
+            try:
+                status, amount, customer_id, _ = self._reconcile_session(session_id)
+            except CommandError as exc:
+                failed += 1
+                payments_logger.warning(
+                    "reconcile_topups auto: session %s failed: %s", session_id, exc
+                )
+                continue
+            if status == "credited":
+                credited += 1
+                payments_logger.warning(
+                    "reconcile_topups auto: credited %s to customer %s for session %s "
+                    "(webhook missed)",
+                    amount, customer_id, session_id,
+                )
+            elif status == "already_credited":
+                already += 1
+            else:
+                not_paid += 1
+        self.stdout.write(
+            f"reconcile_all: {credited} credited, {already} already credited, "
+            f"{not_paid} not paid, {failed} failed."
+        )
+        return credited
 
     def _list_uncredited(self):
         from accounts.models import CustomerTopUpAttempt, WalletTransaction
